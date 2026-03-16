@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LINE 打卡系統</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: "Microsoft JhengHei", sans-serif;
+      background: #f5f6f8;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .box {
+      max-width: 420px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+    }
+    h2 {
+      text-align: center;
+      margin-top: 0;
+      margin-bottom: 20px;
+    }
+    .row {
+      margin-bottom: 12px;
+    }
+    .label {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .value {
+      background: #f1f3f5;
+      padding: 10px;
+      border-radius: 10px;
+      word-break: break-all;
+    }
+    .btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    button {
+      padding: 14px 10px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #0d6efd;
+      color: white;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .msg {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #eef6ff;
+      white-space: pre-line;
+    }
+    .loading {
+      text-align: center;
+      margin-top: 20px;
+      color: #666;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+    .small {
+      font-size: 13px;
+      color: #777;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>LINE 打卡系統</h2>
+
+    <div class="row">
+      <div class="label">LINE 名稱</div>
+      <div class="value" id="displayName">讀取中...</div>
+    </div>
+
+    <div class="row">
+      <div class="label">員工ID</div>
+      <input type="text" id="empid" placeholder="請輸入員工ID，例如 YT001" />
+      <div class="small">第一次使用請輸入員工ID，之後可固定由你們內部再優化成綁定版</div>
+    </div>
+
+    <div class="row">
+      <div class="label">目前位置</div>
+      <div class="value" id="locationText">尚未取得</div>
+    </div>
+
+    <div class="btns">
+      <button onclick="punch('上班')">上班</button>
+      <button onclick="punch('午休開始')">午休開始</button>
+      <button onclick="punch('午休結束')">午休結束</button>
+      <button onclick="punch('下班')">下班</button>
+    </div>
+
+    <div class="loading" id="loading"></div>
+    <div class="msg" id="msg">請先允許定位，然後再按打卡。</div>
+  </div>
+
+  <script>
+    const LIFF_ID = "1353BWbxaznbJIXFTJNQs33EjXE0p9A6ZQLRjZQU2DtE";
+    const API_URL = "https://script.google.com/macros/s/AKfycbwy2JqPSxzHZQXc6CClkNenuIK5-Ny9ouqjUWj3yCJPBlTSDYQd7ZNMkrUDsnJd3QyRbQ/exec";
+
+    let profileName = "";
+    let userLat = null;
+    let userLng = null;
+
+    async function initApp() {
+      try {
+        document.getElementById("loading").innerText = "LIFF 初始化中...";
+        await liff.init({ liffId: LIFF_ID });
+
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+
+        const profile = await liff.getProfile();
+        profileName = profile.displayName || "";
+        document.getElementById("displayName").innerText = profileName;
+
+        document.getElementById("loading").innerText = "定位中...";
+        getLocation();
+      } catch (err) {
+        document.getElementById("loading").innerText = "";
+        document.getElementById("msg").innerText = "LIFF 初始化失敗：" + err.message;
+      }
+    }
+
+    function getLocation() {
+      if (!navigator.geolocation) {
+        document.getElementById("loading").innerText = "";
+        document.getElementById("locationText").innerText = "此裝置不支援定位";
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          userLat = position.coords.latitude;
+          userLng = position.coords.longitude;
+
+          document.getElementById("loading").innerText = "";
+          document.getElementById("locationText").innerText =
+            "緯度：" + userLat + "\n經度：" + userLng;
+        },
+        function(error) {
+          document.getElementById("loading").innerText = "";
+          document.getElementById("locationText").innerText = "定位失敗";
+          document.getElementById("msg").innerText = "無法取得 GPS，請確認已開啟定位權限。";
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+
+    async function punch(type) {
+      const empid = document.getElementById("empid").value.trim();
+
+      if (!empid) {
+        document.getElementById("msg").innerText = "請先輸入員工ID";
+        return;
+      }
+
+      if (userLat === null || userLng === null) {
+        document.getElementById("msg").innerText = "尚未取得 GPS，請稍候或重新整理頁面。";
+        return;
+      }
+
+      document.getElementById("loading").innerText = "送出打卡中...";
+      document.getElementById("msg").innerText = "";
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            empid: empid,
+            name: profileName,
+            type: type,
+            lat: userLat,
+            lng: userLng
+          })
+        });
+
+        const result = await res.json();
+
+        document.getElementById("loading").innerText = "";
+
+        if (result.ok) {
+          document.getElementById("msg").innerText =
+            "✅ " + result.message + "\n" +
+            "姓名：" + result.name + "\n" +
+            "公司：" + result.company + "\n" +
+            "類型：" + result.type + "\n" +
+            "時間：" + result.time + "\n" +
+            "距離：" + result.distance + " 公尺";
+        } else {
+          document.getElementById("msg").innerText = "❌ " + result.message;
+        }
+
+      } catch (err) {
+        document.getElementById("loading").innerText = "";
+        document.getElementById("msg").innerText = "送出失敗：" + err.message;
+      }
+    }
+
+    initApp();
+  </script>
+</body>
+</html>

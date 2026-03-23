@@ -26,13 +26,16 @@
       margin: 0 0 20px 0;
       font-size: 24px;
     }
-    h2 {
-      margin: 0 0 14px 0;
-      font-size: 22px;
-    }
     h3 {
-      margin: 0 0 10px 0;
+      margin: 0 0 12px 0;
       font-size: 18px;
+    }
+    .subTitle {
+      text-align: center;
+      color: #666;
+      margin-top: -6px;
+      margin-bottom: 16px;
+      font-size: 14px;
     }
     .row {
       margin-bottom: 14px;
@@ -68,17 +71,11 @@
       margin-top: 6px;
       line-height: 1.6;
     }
-    .btns {
+    .btns, .menuBtns {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 12px;
       margin-top: 20px;
-    }
-    .menuBtns {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 16px;
     }
     button, .navBtn {
       padding: 14px 10px;
@@ -86,26 +83,23 @@
       border-radius: 12px;
       font-size: 16px;
       cursor: pointer;
-      background: #0d6efd;
       color: white;
       text-decoration: none;
       text-align: center;
       display: inline-block;
       box-sizing: border-box;
     }
-    button:hover, .navBtn:hover {
-      opacity: 0.92;
-    }
-    .btn-green { background: #2e8b57; }
-    .btn-orange { background: #ef8b2c; }
-    .btn-purple { background: #6d45c4; }
-    .btn-red { background: #d94b4b; }
-    .btn-gray { background: #6c757d; }
+    .btn-blue { background: #0d6efd; }
+    .btn-green { background: #4f9560; }
+    .btn-orange { background: #e0923f; }
+    .btn-purple { background: #6c4bc8; }
+    .btn-red { background: #cf5750; }
+    .btn-gray { background: #727b86; }
     .msg {
       margin-top: 20px;
       padding: 12px;
       border-radius: 10px;
-      background: #eef6ff;
+      background: #eef3f8;
       white-space: pre-line;
       min-height: 24px;
       line-height: 1.6;
@@ -115,20 +109,6 @@
       margin-top: 20px;
       color: #666;
       min-height: 20px;
-    }
-    .hidden {
-      display: none !important;
-    }
-    .topBar {
-      margin-bottom: 16px;
-      text-align: center;
-    }
-    .subTitle {
-      text-align: center;
-      color: #666;
-      margin-top: -6px;
-      margin-bottom: 16px;
-      font-size: 14px;
     }
     .page {
       display: none;
@@ -140,39 +120,21 @@
 </head>
 <body>
   <div class="box">
-    <div class="topBar">
-      <h1>員工打卡系統</h1>
-      <div class="subTitle" id="pageTitle">載入中...</div>
+    <h1>員工打卡系統</h1>
+    <div class="subTitle" id="pageTitle">載入中...</div>
+
+    <div class="row">
+      <div class="label">LINE 名稱</div>
+      <div class="value" id="displayName">讀取中...</div>
     </div>
 
-    <!-- 共用身份資訊 -->
-    <div id="commonInfo">
-      <div class="row">
-        <div class="label">LINE 名稱</div>
-        <div class="value" id="displayName">讀取中...</div>
-      </div>
-
-      <div class="row">
-        <div class="label">員工ID</div>
-        <input type="text" id="empid" placeholder="請輸入員工ID，例如 YT001" />
-        <div class="small">目前先沿用員工ID方式，等後端改好後再改成 LINE 綁定正式版。</div>
-      </div>
+    <div class="row">
+      <div class="label">員工ID</div>
+      <input type="text" id="empid" placeholder="請輸入員工ID，例如 YT001" />
+      <div class="small">目前先沿用員工ID方式，等後端改好後再改成 LINE 綁定正式版。</div>
     </div>
 
-    <!-- 首頁 -->
-    <div id="page-home" class="page">
-      <h3>功能選單</h3>
-      <div class="menuBtns">
-        <a class="navBtn btn-green" href="?page=clock">正常打卡</a>
-        <a class="navBtn btn-orange" href="?page=miss">補打卡申請</a>
-        <a class="navBtn btn-purple" href="?page=query">個人月查詢</a>
-        <a class="navBtn btn-gray" href="?page=home">首頁</a>
-      </div>
-
-      <div class="msg" id="homeMsg">請由上方選擇功能。</div>
-    </div>
-
-    <!-- 打卡頁 -->
+    <!-- 正常打卡 -->
     <div id="page-clock" class="page">
       <h3>正常打卡區</h3>
 
@@ -192,7 +154,7 @@
       <div class="msg" id="msg">系統初始化中...</div>
     </div>
 
-    <!-- 補打卡頁 -->
+    <!-- 補打卡 -->
     <div id="page-miss" class="page">
       <h3>補打卡申請區</h3>
 
@@ -222,11 +184,11 @@
         <textarea id="missReason" placeholder="例如：手機沒電、忘記打卡、外出送貨未及操作"></textarea>
       </div>
 
-      <button onclick="submitMiss()">送出補打卡申請</button>
-      <div class="msg" id="missMsg">此頁面已獨立，下一步再接後端補打卡寫入。</div>
+      <button class="btn-blue" onclick="submitMiss()">送出補打卡申請</button>
+      <div class="msg" id="missMsg">此頁面已切好，下一步接後端補打卡寫入。</div>
     </div>
 
-    <!-- 查詢頁 -->
+    <!-- 月查詢 -->
     <div id="page-query" class="page">
       <h3>個人（月）出勤查詢區</h3>
 
@@ -236,8 +198,42 @@
         <div class="small">格式：YYYYMM，例如 202603</div>
       </div>
 
-      <button onclick="queryAttendance()">查詢月紀錄</button>
-      <div class="msg" id="queryMsg">此頁面已獨立，下一步再接後端查詢。</div>
+      <button class="btn-blue" onclick="queryAttendance()">查詢月紀錄</button>
+      <div class="msg" id="queryMsg">此頁面已切好，下一步接後端月查詢。</div>
+    </div>
+
+    <!-- 請假 -->
+    <div id="page-leave" class="page">
+      <h3>請假申請區</h3>
+
+      <div class="row">
+        <div class="label">假別</div>
+        <select id="leaveType">
+          <option value="">請選擇</option>
+          <option value="事假">事假</option>
+          <option value="病假">病假</option>
+          <option value="特休">特休</option>
+          <option value="其他">其他</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <div class="label">開始日期</div>
+        <input type="date" id="leaveStart" />
+      </div>
+
+      <div class="row">
+        <div class="label">結束日期</div>
+        <input type="date" id="leaveEnd" />
+      </div>
+
+      <div class="row">
+        <div class="label">原因</div>
+        <textarea id="leaveReason" placeholder="請輸入請假原因"></textarea>
+      </div>
+
+      <button class="btn-blue" onclick="submitLeave()">送出請假申請</button>
+      <div class="msg" id="leaveMsg">此頁面已切好，下一步接後端請假申請。</div>
     </div>
   </div>
 
@@ -248,34 +244,34 @@
     let profileName = "";
     let userLat = null;
     let userLng = null;
-    let currentPage = "home";
+    let currentPage = "clock";
 
     function getPage() {
       const params = new URLSearchParams(window.location.search);
-      return params.get("page") || "home";
+      return params.get("page") || "clock";
     }
 
     function showPage(page) {
       currentPage = page;
       document.querySelectorAll(".page").forEach(el => el.classList.remove("active"));
 
-      const map = {
-        home: "page-home",
+      const pageMap = {
         clock: "page-clock",
         miss: "page-miss",
-        query: "page-query"
+        query: "page-query",
+        leave: "page-leave"
       };
 
       const titleMap = {
-        home: "首頁",
         clock: "正常打卡",
         miss: "補打卡申請",
-        query: "個人月查詢"
+        query: "個人月查詢",
+        leave: "請假申請"
       };
 
-      const targetId = map[page] || "page-home";
-      document.getElementById(targetId).classList.add("active");
-      document.getElementById("pageTitle").innerText = titleMap[page] || "首頁";
+      const target = pageMap[page] || "page-clock";
+      document.getElementById(target).classList.add("active");
+      document.getElementById("pageTitle").innerText = titleMap[page] || "正常打卡";
     }
 
     function setLoading(text) {
@@ -289,13 +285,15 @@
     }
 
     function setMissMsg(text) {
-      const el = document.getElementById("missMsg");
-      if (el) el.innerText = text || "";
+      document.getElementById("missMsg").innerText = text || "";
     }
 
     function setQueryMsg(text) {
-      const el = document.getElementById("queryMsg");
-      if (el) el.innerText = text || "";
+      document.getElementById("queryMsg").innerText = text || "";
+    }
+
+    function setLeaveMsg(text) {
+      document.getElementById("leaveMsg").innerText = text || "";
     }
 
     function getErrorMessage(err) {
@@ -306,9 +304,6 @@
     async function initApp() {
       try {
         showPage(getPage());
-
-        setLoading("LIFF 初始化中...");
-        setMsg("請稍候，正在登入與取得資料...");
 
         await liff.init({ liffId: LIFF_ID });
 
@@ -321,19 +316,15 @@
         profileName = profile.displayName || "";
         document.getElementById("displayName").innerText = profileName || "未取得";
 
-        // 預設月份
         const now = new Date();
         const y = now.getFullYear();
         const m = String(now.getMonth() + 1).padStart(2, "0");
         document.getElementById("queryMonth").value = `${y}${m}`;
 
-        // 只有打卡頁才抓 GPS
         if (currentPage === "clock") {
           setLoading("定位中...");
           setMsg("正在取得 GPS 位置...");
           getLocation();
-        } else {
-          setLoading("");
         }
 
       } catch (err) {
@@ -354,11 +345,9 @@
         function(position) {
           userLat = position.coords.latitude;
           userLng = position.coords.longitude;
-
           setLoading("");
           document.getElementById("locationText").innerText =
             "緯度：" + userLat + "\n經度：" + userLng;
-
           setMsg("定位成功，請輸入員工ID後再按打卡。");
         },
         function(error) {
@@ -415,8 +404,8 @@
         });
 
         const rawText = await res.text();
-
         let result;
+
         try {
           result = JSON.parse(rawText);
         } catch (parseErr) {
@@ -460,10 +449,7 @@
         return;
       }
 
-      setMissMsg(
-        "目前已切成獨立補打卡頁。\n" +
-        "下一步我再幫你接 GAS 寫入『補打卡申請』工作表。"
-      );
+      setMissMsg("頁面已正確切換，下一步我幫你接 GAS 寫入補打卡申請。");
     }
 
     function queryAttendance() {
@@ -479,10 +465,26 @@
         return;
       }
 
-      setQueryMsg(
-        "目前已切成獨立查詢頁。\n" +
-        "下一步我再幫你接 GAS 查詢『打卡紀錄』工作表。"
-      );
+      setQueryMsg("頁面已正確切換，下一步我幫你接 GAS 月查詢。");
+    }
+
+    function submitLeave() {
+      const empid = document.getElementById("empid").value.trim();
+      const type = document.getElementById("leaveType").value;
+      const start = document.getElementById("leaveStart").value;
+      const end = document.getElementById("leaveEnd").value;
+      const reason = document.getElementById("leaveReason").value.trim();
+
+      if (!empid) {
+        setLeaveMsg("請先輸入員工ID");
+        return;
+      }
+      if (!type || !start || !end || !reason) {
+        setLeaveMsg("請完整填寫請假資料。");
+        return;
+      }
+
+      setLeaveMsg("頁面已正確切換，下一步我幫你接 GAS 請假申請。");
     }
 
     initApp();

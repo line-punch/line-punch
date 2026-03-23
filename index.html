@@ -14,65 +14,43 @@
       color: #333;
     }
     .box {
-      max-width: 420px;
+      max-width: 460px;
       margin: 0 auto;
       background: #fff;
       border-radius: 16px;
       padding: 24px;
       box-shadow: 0 4px 18px rgba(0,0,0,0.08);
     }
-    h2 {
+    h1 {
       text-align: center;
-      margin-top: 0;
-      margin-bottom: 20px;
+      margin: 0 0 20px 0;
+      font-size: 24px;
+    }
+    h2 {
+      margin: 0 0 14px 0;
+      font-size: 22px;
+    }
+    h3 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
     }
     .row {
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
     .label {
       font-weight: bold;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
+      font-size: 15px;
     }
     .value {
       background: #f1f3f5;
-      padding: 10px;
+      padding: 12px;
       border-radius: 10px;
       word-break: break-all;
       white-space: pre-line;
-    }
-    .btns {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 20px;
-    }
-    button {
-      padding: 14px 10px;
-      border: none;
-      border-radius: 12px;
-      font-size: 16px;
-      cursor: pointer;
-      background: #0d6efd;
-      color: white;
-    }
-    button:hover {
-      opacity: 0.9;
-    }
-    .msg {
-      margin-top: 20px;
-      padding: 12px;
-      border-radius: 10px;
-      background: #eef6ff;
-      white-space: pre-line;
       min-height: 24px;
     }
-    .loading {
-      text-align: center;
-      margin-top: 20px;
-      color: #666;
-      min-height: 20px;
-    }
-    input {
+    input, select, textarea {
       width: 100%;
       padding: 12px;
       border-radius: 10px;
@@ -80,42 +58,187 @@
       box-sizing: border-box;
       font-size: 16px;
     }
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
     .small {
       font-size: 13px;
       color: #777;
       margin-top: 6px;
+      line-height: 1.6;
+    }
+    .btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .menuBtns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    button, .navBtn {
+      padding: 14px 10px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #0d6efd;
+      color: white;
+      text-decoration: none;
+      text-align: center;
+      display: inline-block;
+      box-sizing: border-box;
+    }
+    button:hover, .navBtn:hover {
+      opacity: 0.92;
+    }
+    .btn-green { background: #2e8b57; }
+    .btn-orange { background: #ef8b2c; }
+    .btn-purple { background: #6d45c4; }
+    .btn-red { background: #d94b4b; }
+    .btn-gray { background: #6c757d; }
+    .msg {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #eef6ff;
+      white-space: pre-line;
+      min-height: 24px;
+      line-height: 1.6;
+    }
+    .loading {
+      text-align: center;
+      margin-top: 20px;
+      color: #666;
+      min-height: 20px;
+    }
+    .hidden {
+      display: none !important;
+    }
+    .topBar {
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .subTitle {
+      text-align: center;
+      color: #666;
+      margin-top: -6px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .page {
+      display: none;
+    }
+    .page.active {
+      display: block;
     }
   </style>
 </head>
 <body>
   <div class="box">
-    <h2>LINE 打卡系統</h2>
-
-    <div class="row">
-      <div class="label">LINE 名稱</div>
-      <div class="value" id="displayName">讀取中...</div>
+    <div class="topBar">
+      <h1>員工打卡系統</h1>
+      <div class="subTitle" id="pageTitle">載入中...</div>
     </div>
 
-    <div class="row">
-      <div class="label">員工ID</div>
-      <input type="text" id="empid" placeholder="請輸入員工ID，例如 YT001" />
-      <div class="small">第一次使用請輸入員工ID，之後可固定由你們內部再優化成綁定版</div>
+    <!-- 共用身份資訊 -->
+    <div id="commonInfo">
+      <div class="row">
+        <div class="label">LINE 名稱</div>
+        <div class="value" id="displayName">讀取中...</div>
+      </div>
+
+      <div class="row">
+        <div class="label">員工ID</div>
+        <input type="text" id="empid" placeholder="請輸入員工ID，例如 YT001" />
+        <div class="small">目前先沿用員工ID方式，等後端改好後再改成 LINE 綁定正式版。</div>
+      </div>
     </div>
 
-    <div class="row">
-      <div class="label">目前位置</div>
-      <div class="value" id="locationText">尚未取得</div>
+    <!-- 首頁 -->
+    <div id="page-home" class="page">
+      <h3>功能選單</h3>
+      <div class="menuBtns">
+        <a class="navBtn btn-green" href="?page=clock">正常打卡</a>
+        <a class="navBtn btn-orange" href="?page=miss">補打卡申請</a>
+        <a class="navBtn btn-purple" href="?page=query">個人月查詢</a>
+        <a class="navBtn btn-gray" href="?page=home">首頁</a>
+      </div>
+
+      <div class="msg" id="homeMsg">請由上方選擇功能。</div>
     </div>
 
-    <div class="btns">
-      <button onclick="punch('上班')">上班</button>
-      <button onclick="punch('午休開始')">午休開始</button>
-      <button onclick="punch('午休結束')">午休結束</button>
-      <button onclick="punch('下班')">下班</button>
+    <!-- 打卡頁 -->
+    <div id="page-clock" class="page">
+      <h3>正常打卡區</h3>
+
+      <div class="row">
+        <div class="label">目前位置</div>
+        <div class="value" id="locationText">尚未取得</div>
+      </div>
+
+      <div class="btns">
+        <button class="btn-green" onclick="punch('上班')">上班</button>
+        <button class="btn-orange" onclick="punch('午休開始')">午休開始</button>
+        <button class="btn-purple" onclick="punch('午休結束')">午休結束</button>
+        <button class="btn-red" onclick="punch('下班')">下班</button>
+      </div>
+
+      <div class="loading" id="loading"></div>
+      <div class="msg" id="msg">系統初始化中...</div>
     </div>
 
-    <div class="loading" id="loading"></div>
-    <div class="msg" id="msg">系統初始化中...</div>
+    <!-- 補打卡頁 -->
+    <div id="page-miss" class="page">
+      <h3>補打卡申請區</h3>
+
+      <div class="row">
+        <div class="label">補卡日期</div>
+        <input type="date" id="missDate" />
+      </div>
+
+      <div class="row">
+        <div class="label">班別</div>
+        <select id="missType">
+          <option value="">請選擇</option>
+          <option value="上班">上班</option>
+          <option value="午休開始">午休開始</option>
+          <option value="午休結束">午休結束</option>
+          <option value="下班">下班</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <div class="label">補卡時間</div>
+        <input type="time" id="missTime" />
+      </div>
+
+      <div class="row">
+        <div class="label">原因</div>
+        <textarea id="missReason" placeholder="例如：手機沒電、忘記打卡、外出送貨未及操作"></textarea>
+      </div>
+
+      <button onclick="submitMiss()">送出補打卡申請</button>
+      <div class="msg" id="missMsg">此頁面已獨立，下一步再接後端補打卡寫入。</div>
+    </div>
+
+    <!-- 查詢頁 -->
+    <div id="page-query" class="page">
+      <h3>個人（月）出勤查詢區</h3>
+
+      <div class="row">
+        <div class="label">月份</div>
+        <input type="text" id="queryMonth" placeholder="請輸入 202603" maxlength="6" />
+        <div class="small">格式：YYYYMM，例如 202603</div>
+      </div>
+
+      <button onclick="queryAttendance()">查詢月紀錄</button>
+      <div class="msg" id="queryMsg">此頁面已獨立，下一步再接後端查詢。</div>
+    </div>
   </div>
 
   <script>
@@ -125,9 +248,65 @@
     let profileName = "";
     let userLat = null;
     let userLng = null;
+    let currentPage = "home";
+
+    function getPage() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("page") || "home";
+    }
+
+    function showPage(page) {
+      currentPage = page;
+      document.querySelectorAll(".page").forEach(el => el.classList.remove("active"));
+
+      const map = {
+        home: "page-home",
+        clock: "page-clock",
+        miss: "page-miss",
+        query: "page-query"
+      };
+
+      const titleMap = {
+        home: "首頁",
+        clock: "正常打卡",
+        miss: "補打卡申請",
+        query: "個人月查詢"
+      };
+
+      const targetId = map[page] || "page-home";
+      document.getElementById(targetId).classList.add("active");
+      document.getElementById("pageTitle").innerText = titleMap[page] || "首頁";
+    }
+
+    function setLoading(text) {
+      const el = document.getElementById("loading");
+      if (el) el.innerText = text || "";
+    }
+
+    function setMsg(text) {
+      const el = document.getElementById("msg");
+      if (el) el.innerText = text || "";
+    }
+
+    function setMissMsg(text) {
+      const el = document.getElementById("missMsg");
+      if (el) el.innerText = text || "";
+    }
+
+    function setQueryMsg(text) {
+      const el = document.getElementById("queryMsg");
+      if (el) el.innerText = text || "";
+    }
+
+    function getErrorMessage(err) {
+      if (!err) return "未知錯誤";
+      return err.message || String(err);
+    }
 
     async function initApp() {
       try {
+        showPage(getPage());
+
         setLoading("LIFF 初始化中...");
         setMsg("請稍候，正在登入與取得資料...");
 
@@ -142,26 +321,25 @@
         profileName = profile.displayName || "";
         document.getElementById("displayName").innerText = profileName || "未取得";
 
-        setLoading("定位中...");
-        setMsg("正在取得 GPS 位置...");
-        getLocation();
+        // 預設月份
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        document.getElementById("queryMonth").value = `${y}${m}`;
+
+        // 只有打卡頁才抓 GPS
+        if (currentPage === "clock") {
+          setLoading("定位中...");
+          setMsg("正在取得 GPS 位置...");
+          getLocation();
+        } else {
+          setLoading("");
+        }
+
       } catch (err) {
         setLoading("");
         setMsg("LIFF 初始化失敗：" + getErrorMessage(err));
       }
-    }
-
-    function setLoading(text) {
-      document.getElementById("loading").innerText = text || "";
-    }
-
-    function setMsg(text) {
-      document.getElementById("msg").innerText = text || "";
-    }
-
-    function getErrorMessage(err) {
-      if (!err) return "未知錯誤";
-      return err.message || String(err);
     }
 
     function getLocation() {
@@ -264,6 +442,47 @@
         setLoading("");
         setMsg("送出失敗：" + getErrorMessage(err));
       }
+    }
+
+    function submitMiss() {
+      const empid = document.getElementById("empid").value.trim();
+      const date = document.getElementById("missDate").value;
+      const type = document.getElementById("missType").value;
+      const time = document.getElementById("missTime").value;
+      const reason = document.getElementById("missReason").value.trim();
+
+      if (!empid) {
+        setMissMsg("請先輸入員工ID");
+        return;
+      }
+      if (!date || !type || !time || !reason) {
+        setMissMsg("請完整填寫補打卡資料。");
+        return;
+      }
+
+      setMissMsg(
+        "目前已切成獨立補打卡頁。\n" +
+        "下一步我再幫你接 GAS 寫入『補打卡申請』工作表。"
+      );
+    }
+
+    function queryAttendance() {
+      const empid = document.getElementById("empid").value.trim();
+      const month = document.getElementById("queryMonth").value.trim();
+
+      if (!empid) {
+        setQueryMsg("請先輸入員工ID");
+        return;
+      }
+      if (!/^[0-9]{6}$/.test(month)) {
+        setQueryMsg("月份格式錯誤，請輸入 202603 這種格式。");
+        return;
+      }
+
+      setQueryMsg(
+        "目前已切成獨立查詢頁。\n" +
+        "下一步我再幫你接 GAS 查詢『打卡紀錄』工作表。"
+      );
     }
 
     initApp();

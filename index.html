@@ -129,8 +129,8 @@
 
     <div class="row">
       <div class="label">員工ID</div>
-      <input type="text" id="empid" placeholder="請輸入員工ID，例如 YT001" />
-      <div class="small">目前先沿用員工ID方式，等後端改好後再改成 LINE 綁定正式版。</div>
+      <input type="text" id="empid" placeholder="第一次請輸入員工ID，例如 YT001" />
+      <div class="small">第一次會綁定目前這個 LINE，之後若是同一個 LINE 可直接使用。</div>
     </div>
 
     <!-- 正常打卡 -->
@@ -275,6 +275,7 @@
     const API_URL = "https://script.google.com/macros/s/AKfycbxi93T80nRUb5UH47kFfcfM9BMPmJP4IolinOFe5xdBkRUefkTFS7s-f6WxP3I0s98/exec";
 
     let profileName = "";
+    let lineUserId = "";
     let userLat = null;
     let userLng = null;
     let currentPage = "clock";
@@ -397,6 +398,7 @@
 
         const profile = await liff.getProfile();
         profileName = profile.displayName || "";
+        lineUserId = profile.userId || "";
         document.getElementById("displayName").innerText = profileName || "未取得";
 
         const now = new Date();
@@ -475,6 +477,7 @@
           action: "clock",
           empid: empid,
           name: profileName,
+          userId: lineUserId,
           type: type,
           lat: userLat,
           lng: userLng
@@ -522,6 +525,7 @@
           action: "miss",
           empid: empid,
           name: profileName,
+          userId: lineUserId,
           date: date,
           type: type,
           time: time,
@@ -557,6 +561,7 @@
         const result = await jsonpRequest({
           action: "query",
           empid: empid,
+          userId: lineUserId,
           month: month
         });
 
@@ -616,6 +621,7 @@
           action: "leave",
           empid: empid,
           name: profileName,
+          userId: lineUserId,
           type: type,
           unit: unit,
           start: start,

@@ -112,6 +112,9 @@
     .page.active {
       display: block;
     }
+    .hidden {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
@@ -209,7 +212,18 @@
           <option value="事假">事假</option>
           <option value="病假">病假</option>
           <option value="特休">特休</option>
+          <option value="公假">公假</option>
           <option value="其他">其他</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <div class="label">請假方式</div>
+        <select id="leaveUnit" onchange="toggleLeaveMode()">
+          <option value="">請選擇</option>
+          <option value="全天">全天</option>
+          <option value="半天">半天</option>
+          <option value="時數">時數</option>
         </select>
       </div>
 
@@ -221,6 +235,29 @@
       <div class="row">
         <div class="label">結束日期</div>
         <input type="date" id="leaveEnd" />
+      </div>
+
+      <div id="halfDayBox" class="hidden">
+        <div class="row">
+          <div class="label">半天時段</div>
+          <select id="halfDayPeriod">
+            <option value="">請選擇</option>
+            <option value="上午">上午</option>
+            <option value="下午">下午</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="hourBox" class="hidden">
+        <div class="row">
+          <div class="label">開始時間</div>
+          <input type="time" id="leaveStartTime" />
+        </div>
+
+        <div class="row">
+          <div class="label">結束時間</div>
+          <input type="time" id="leaveEndTime" />
+        </div>
       </div>
 
       <div class="row">
@@ -249,7 +286,6 @@
 
     function showPage(page) {
       currentPage = page;
-
       document.querySelectorAll(".page").forEach(el => el.classList.remove("active"));
 
       const pageMap = {
@@ -299,6 +335,12 @@
     function getErrorMessage(err) {
       if (!err) return "未知錯誤";
       return err.message || String(err);
+    }
+
+    function toggleLeaveMode() {
+      const unit = document.getElementById("leaveUnit").value;
+      document.getElementById("halfDayBox").classList.toggle("hidden", unit !== "半天");
+      document.getElementById("hourBox").classList.toggle("hidden", unit !== "時數");
     }
 
     async function initApp() {
@@ -519,16 +561,28 @@
     async function submitLeave() {
       const empid = document.getElementById("empid").value.trim();
       const type = document.getElementById("leaveType").value;
+      const unit = document.getElementById("leaveUnit").value;
       const start = document.getElementById("leaveStart").value;
       const end = document.getElementById("leaveEnd").value;
+      const halfDayPeriod = document.getElementById("halfDayPeriod").value;
+      const startTime = document.getElementById("leaveStartTime").value;
+      const endTime = document.getElementById("leaveEndTime").value;
       const reason = document.getElementById("leaveReason").value.trim();
 
       if (!empid) {
         setLeaveMsg("請先輸入員工ID");
         return;
       }
-      if (!type || !start || !end || !reason) {
+      if (!type || !unit || !start || !end || !reason) {
         setLeaveMsg("請完整填寫請假資料。");
+        return;
+      }
+      if (unit === "半天" && !halfDayPeriod) {
+        setLeaveMsg("請選擇上午或下午。");
+        return;
+      }
+      if (unit === "時數" && (!startTime || !endTime)) {
+        setLeaveMsg("請輸入開始時間與結束時間。");
         return;
       }
 
@@ -540,8 +594,12 @@
           empid: empid,
           name: profileName,
           type: type,
+          unit: unit,
           start: start,
           end: end,
+          halfDayPeriod: halfDayPeriod,
+          startTime: startTime,
+          endTime: endTime,
           reason: reason
         });
 

@@ -91,6 +91,7 @@
     .btn-orange { background: #e0923f; }
     .btn-purple { background: #6c4bc8; }
     .btn-red { background: #cf5750; }
+    .btn-gray { background: #6c757d; }
     .msg {
       margin-top: 20px;
       padding: 12px;
@@ -127,10 +128,17 @@
       <div class="value" id="displayName">讀取中...</div>
     </div>
 
-    <div class="row">
-      <div class="label">員工ID</div>
+    <div id="employeeInfoBox" class="row hidden">
+      <div class="label">員工資訊</div>
+      <div class="value" id="employeeInfo">讀取中...</div>
+    </div>
+
+    <div id="bindBox" class="row hidden">
+      <div class="label">首次綁定員工ID</div>
       <input type="text" id="empid" placeholder="第一次請輸入員工ID，例如 YT001" />
-      <div class="small">第一次會綁定目前這個 LINE，之後若是同一個 LINE 可直接使用。</div>
+      <div class="small">首次綁定成功後，之後同一個 LINE 將自動登入，不用再輸入員工ID。</div>
+      <button class="btn-blue" style="margin-top:10px;" onclick="bindEmployee()">確認綁定</button>
+      <div class="msg" id="bindMsg">尚未綁定，請先輸入員工ID。</div>
     </div>
 
     <!-- 正常打卡 -->
@@ -279,6 +287,7 @@
     let userLat = null;
     let userLng = null;
     let currentPage = "clock";
+    let currentEmployee = null;
 
     function getPage() {
       const params = new URLSearchParams(window.location.search);
@@ -330,6 +339,11 @@
 
     function setLeaveMsg(text) {
       const el = document.getElementById("leaveMsg");
+      if (el) el.innerText = text || "";
+    }
+
+    function setBindMsg(text) {
+      const el = document.getElementById("bindMsg");
       if (el) el.innerText = text || "";
     }
 
@@ -385,6 +399,24 @@
       });
     }
 
+    function renderEmployeeInfo(emp) {
+      currentEmployee = emp;
+      document.getElementById("employeeInfoBox").classList.remove("hidden");
+      document.getElementById("employeeInfo").innerText =
+        "姓名：" + (emp.name || "") + "\n" +
+        "員工ID：" + (emp.employeeId || "") + "\n" +
+        "公司：" + (emp.company || "") + "\n" +
+        "部門：" + (emp.department || "");
+    }
+
+    function showBindMode() {
+      document.getElementById("bindBox").classList.remove("hidden");
+    }
+
+    function hideBindMode() {
+      document.getElementById("bindBox").classList.add("hidden");
+    }
+
     async function initApp() {
       try {
         showPage(getPage());
@@ -407,6 +439,19 @@
         const queryMonthEl = document.getElementById("queryMonth");
         if (queryMonthEl) queryMonthEl.value = `${y}${m}`;
 
+        const who = await jsonpRequest({
+          action: "whoami",
+          userId: lineUserId
+        });
+
+        if (who.ok && who.bound) {
+          renderEmployeeInfo(who.employee);
+          hideBindMode();
+        } else {
+          showBindMode();
+          setBindMsg("尚未綁定，請先輸入員工ID完成首次綁定。");
+        }
+
         if (currentPage === "clock") {
           setLoading("定位中...");
           setMsg("正在取得 GPS 位置...");
@@ -417,6 +462,42 @@
         setLoading("");
         setMsg("LIFF 初始化失敗：" + getErrorMessage(err));
       }
+    }
+
+    async function bindEmployee() {
+      const empid = document.getElementById("empid").value.trim();
+      if (!empid) {
+        setBindMsg("請先輸入員工ID。");
+        return;
+      }
+
+      setBindMsg("綁定中...");
+
+      try {
+        const result = await jsonpRequest({
+          action: "bind",
+          empid: empid,
+          userId: lineUserId,
+          name: profileName
+        });
+
+        if (!result.ok) {
+          setBindMsg("❌ " + (result.message || "綁定失敗"));
+          return;
+        }
+
+        renderEmployeeInfo(result.employee);
+        hideBindMode();
+        document.getElementById("empid").value = result.employee.employeeId || "";
+        setBindMsg("✅ 綁定成功");
+      } catch (err) {
+        setBindMsg("綁定失敗：" + getErrorMessage(err));
+      }
+    }
+
+    function getActiveEmpid() {
+      if (currentEmployee && currentEmployee.employeeId) return currentEmployee.employeeId;
+      return document.getElementById("empid").value.trim();
     }
 
     function getLocation() {
@@ -434,7 +515,7 @@
           setLoading("");
           document.getElementById("locationText").innerText =
             "緯度：" + userLat + "\n經度：" + userLng;
-          setMsg("定位成功，請輸入員工ID後再按打卡。");
+          setMsg("定位成功，可開始打卡。");
         },
         function(error) {
           setLoading("");
@@ -456,10 +537,10 @@
     }
 
     async function punch(type) {
-      const empid = document.getElementById("empid").value.trim();
+      const empid = getActiveEmpid();
 
       if (!empid) {
-        setMsg("請先輸入員工ID");
+        setMsg("請先完成首次綁定。");
         return;
       }
 
@@ -503,14 +584,14 @@
     }
 
     async function submitMiss() {
-      const empid = document.getElementById("empid").value.trim();
+      const empid = getActiveEmpid();
       const date = document.getElementById("missDate").value;
       const type = document.getElementById("missType").value;
       const time = document.getElementById("missTime").value;
       const reason = document.getElementById("missReason").value.trim();
 
       if (!empid) {
-        setMissMsg("請先輸入員工ID");
+        setMissMsg("請先完成首次綁定。");
         return;
       }
       if (!date || !type || !time || !reason) {
@@ -543,11 +624,11 @@
     }
 
     async function queryAttendance() {
-      const empid = document.getElementById("empid").value.trim();
+      const empid = getActiveEmpid();
       const month = document.getElementById("queryMonth").value.trim();
 
       if (!empid) {
-        setQueryMsg("請先輸入員工ID");
+        setQueryMsg("請先完成首次綁定。");
         return;
       }
       if (!/^[0-9]{6}$/.test(month)) {
@@ -587,7 +668,7 @@
     }
 
     async function submitLeave() {
-      const empid = document.getElementById("empid").value.trim();
+      const empid = getActiveEmpid();
       const type = document.getElementById("leaveType").value;
       const unit = document.getElementById("leaveUnit").value;
       const start = document.getElementById("leaveStart").value;
@@ -598,7 +679,7 @@
       const reason = document.getElementById("leaveReason").value.trim();
 
       if (!empid) {
-        setLeaveMsg("請先輸入員工ID");
+        setLeaveMsg("請先完成首次綁定。");
         return;
       }
       if (!type || !unit || !start || !end || !reason) {

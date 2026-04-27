@@ -190,9 +190,22 @@
           <textarea id="missReason" placeholder="請輸入補打卡原因"></textarea>
         </div>
 
-        <button class="btn-blue" onclick="submitMiss()">送出補打卡申請</button>
-        <div class="msg" id="missMsg">請填寫補打卡資料後送出。</div>
-      </div>
+ <button class="btn-blue" onclick="submitMiss()">送出補打卡申請</button>
+<div class="msg" id="missMsg">請填寫補打卡資料後送出。</div>
+
+<div class="row" style="margin-top:22px;">
+  <div class="label">我的補打卡申請紀錄</div>
+
+  <button class="btn-blue"
+          onclick="loadMissHistory()"
+          style="margin-top:6px;">
+    重新整理補打卡紀錄
+  </button>
+
+  <div id="missHistory" class="table-list">
+    尚未查詢
+  </div>
+</div>
 
       <!-- 月查詢 -->
       <div id="page-query" class="page">
@@ -646,6 +659,7 @@
 
         if (result.ok) {
           setMissMsg("✅ " + (result.message || "補打卡申請已送出"));
+          loadMissHistory();
         } else {
           setMissMsg("❌ " + (result.message || "補打卡送出失敗"));
         }

@@ -777,6 +777,49 @@
       }
     }
 
+async function loadMissHistory() {
+  const empid = getActiveEmpid();
+  const box = document.getElementById("missHistory");
+
+  if (!box) return;
+
+  if (!empid) {
+    box.innerText = "請先完成首次綁定。";
+    return;
+  }
+
+  box.innerText = "載入中...";
+
+  try {
+    const result = await jsonpRequest({
+      action: "missHistory",
+      empid: empid,
+      userId: lineUserId
+    });
+
+    if (!result.ok) {
+      box.innerText = "查詢失敗：" + (result.message || "");
+      return;
+    }
+
+    const rows = result.data || [];
+    if (!rows.length) {
+      box.innerText = "目前沒有補打卡申請紀錄。";
+      return;
+    }
+
+    let text = "";
+    rows.forEach((r, i) => {
+      text += `${i + 1}. 日期：${r.date}｜類型：${r.type}｜時間：${r.time}｜狀態：${r.status}\n原因：${r.reason || ""}\n\n`;
+    });
+
+    box.innerText = text;
+
+  } catch (err) {
+    box.innerText = "查詢失敗：" + getErrorMessage(err);
+  }
+}
+    
     async function loadLeaveHistory() {
       const empid = getActiveEmpid();
       const box = document.getElementById("leaveHistory");

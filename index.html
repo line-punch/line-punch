@@ -13,10 +13,7 @@
       font-family:"Microsoft JhengHei", Arial, sans-serif;
       color:#333;
     }
-    .wrap{
-      max-width:520px;
-      margin:0 auto;
-    }
+    .wrap{ max-width:520px; margin:0 auto; }
     .card{
       background:#fff;
       border-radius:18px;
@@ -24,29 +21,16 @@
       padding:22px;
       margin-bottom:16px;
     }
-    h1{
-      text-align:center;
-      margin:0 0 8px 0;
-      font-size:24px;
-    }
+    h1{ text-align:center; margin:0 0 8px 0; font-size:24px; }
     .subtitle{
       text-align:center;
       color:#666;
       margin-bottom:18px;
       font-size:14px;
     }
-    h3{
-      margin:0 0 14px 0;
-      font-size:18px;
-    }
-    .row{
-      margin-bottom:14px;
-    }
-    .label{
-      font-size:15px;
-      font-weight:700;
-      margin-bottom:6px;
-    }
+    h3{ margin:0 0 14px 0; font-size:18px; }
+    .row{ margin-bottom:14px; }
+    .label{ font-size:15px; font-weight:700; margin-bottom:6px; }
     .value{
       background:#eef2f6;
       border-radius:12px;
@@ -64,10 +48,7 @@
       font-size:16px;
       background:#fff;
     }
-    textarea{
-      min-height:92px;
-      resize:vertical;
-    }
+    textarea{ min-height:92px; resize:vertical; }
     .small{
       color:#777;
       font-size:13px;
@@ -168,7 +149,8 @@
 
         <div class="row">
           <div class="label">日期</div>
-          <input type="date" id="missDate">
+          <select id="missDate"></select>
+          <div class="small">補打卡日期只能選今天或昨天。</div>
         </div>
 
         <div class="row">
@@ -190,24 +172,18 @@
           <textarea id="missReason" placeholder="請輸入補打卡原因"></textarea>
         </div>
 
- <button class="btn-blue" onclick="submitMiss()">送出補打卡申請</button>
-<div class="msg" id="missMsg">請填寫補打卡資料後送出。</div>
+        <button class="btn-blue" onclick="submitMiss()">送出補打卡申請</button>
+        <div class="msg" id="missMsg">請填寫補打卡資料後送出。</div>
 
-<div class="row" style="margin-top:22px;">
-  <div class="label">我的補打卡申請紀錄</div>
+        <div class="row" style="margin-top:22px;">
+          <div class="label">我的補打卡申請紀錄</div>
+          <button class="btn-blue" onclick="loadMissHistory()" style="margin-top:6px;">
+            重新整理補打卡紀錄
+          </button>
+          <div id="missHistory" class="table-list">尚未查詢</div>
+        </div>
+      </div>
 
-  <button class="btn-blue"
-          onclick="loadMissHistory()"
-          style="margin-top:6px;">
-    重新整理補打卡紀錄
-  </button>
-
-  <div id="missHistory" class="table-list">
-    尚未查詢
-  </div>
-</div>
-</div>
-        
       <!-- 月查詢 -->
       <div id="page-query" class="page">
         <h3>個人（月）出勤查詢區</h3>
@@ -447,9 +423,35 @@
       return monthsDiff >= 0 && monthsDiff <= 2;
     }
 
+    function initMissDateOptions() {
+      const el = document.getElementById("missDate");
+      if (!el) return;
+
+      el.innerHTML = "";
+
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+
+      [today, yesterday].forEach(d => {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+
+        const value = `${yyyy}/${mm}/${dd}`;
+        const text = `${yyyy}年${mm}月${dd}日`;
+
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = text;
+        el.appendChild(opt);
+      });
+    }
+
     async function initApp() {
       try {
         showPage(getPage());
+        initMissDateOptions();
 
         await liff.init({ liffId: LIFF_ID });
 
@@ -470,13 +472,6 @@
         if (queryMonthEl) queryMonthEl.value = `${y}${m}`;
 
         const monthRange = getCurrentMonthRange();
-        const missDateEl = document.getElementById("missDate");
-        if (missDateEl) {
-          missDateEl.min = monthRange.first;
-          missDateEl.max = monthRange.last;
-          missDateEl.value = monthRange.first;
-        }
-
         const leaveDateEl = document.getElementById("leaveDate");
         if (leaveDateEl) leaveDateEl.value = monthRange.first;
 
@@ -488,9 +483,10 @@
         if (who.ok && who.bound) {
           renderEmployeeInfo(who.employee);
           hideBindMode();
-          if (currentPage === "leave") {
-            loadLeaveHistory();
-          }
+
+          if (currentPage === "leave") loadLeaveHistory();
+          if (currentPage === "miss") loadMissHistory();
+
         } else {
           showBindMode();
           setBindMsg("尚未綁定，請先輸入員工ID完成首次綁定。");
@@ -535,9 +531,9 @@
         document.getElementById("empid").value = result.employee.employeeId || "";
         setBindMsg("✅ 綁定成功");
 
-        if (currentPage === "leave") {
-          loadLeaveHistory();
-        }
+        if (currentPage === "leave") loadLeaveHistory();
+        if (currentPage === "miss") loadMissHistory();
+
       } catch (err) {
         setBindMsg("綁定失敗：" + getErrorMessage(err));
       }
@@ -778,49 +774,50 @@
       }
     }
 
-async function loadMissHistory() {
-  const empid = getActiveEmpid();
-  const box = document.getElementById("missHistory");
+    async function loadMissHistory() {
+      const empid = getActiveEmpid();
+      const box = document.getElementById("missHistory");
 
-  if (!box) return;
+      if (!box) return;
 
-  if (!empid) {
-    box.innerText = "請先完成首次綁定。";
-    return;
-  }
+      if (!empid) {
+        box.innerText = "請先完成首次綁定。";
+        return;
+      }
 
-  box.innerText = "載入中...";
+      box.innerText = "載入中...";
 
-  try {
-    const result = await jsonpRequest({
-      action: "missHistory",
-      empid: empid,
-      userId: lineUserId
-    });
+      try {
+        const result = await jsonpRequest({
+          action: "missHistory",
+          empid: empid,
+          userId: lineUserId
+        });
 
-    if (!result.ok) {
-      box.innerText = "查詢失敗：" + (result.message || "");
-      return;
+        if (!result.ok) {
+          box.innerText = "查詢失敗：" + (result.message || "");
+          return;
+        }
+
+        const rows = result.data || [];
+        if (!rows.length) {
+          box.innerText = "目前沒有補打卡申請紀錄。";
+          return;
+        }
+
+        let text = "";
+        rows.forEach((r, i) => {
+          const approved = r.approvedTime ? `｜核定：${r.approvedTime}` : "";
+          text += `${i + 1}. 日期：${r.date}｜類型：${r.type}｜申請：${r.time}${approved}｜狀態：${r.status}\n原因：${r.reason || ""}\n\n`;
+        });
+
+        box.innerText = text;
+
+      } catch (err) {
+        box.innerText = "查詢失敗：" + getErrorMessage(err);
+      }
     }
 
-    const rows = result.data || [];
-    if (!rows.length) {
-      box.innerText = "目前沒有補打卡申請紀錄。";
-      return;
-    }
-
-    let text = "";
-    rows.forEach((r, i) => {
-      text += `${i + 1}. 日期：${r.date}｜類型：${r.type}｜時間：${r.time}｜狀態：${r.status}\n原因：${r.reason || ""}\n\n`;
-    });
-
-    box.innerText = text;
-
-  } catch (err) {
-    box.innerText = "查詢失敗：" + getErrorMessage(err);
-  }
-}
-    
     async function loadLeaveHistory() {
       const empid = getActiveEmpid();
       const box = document.getElementById("leaveHistory");

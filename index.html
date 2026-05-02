@@ -205,7 +205,8 @@
 
         <div class="row">
           <div class="label">請假日期</div>
-          <input type="date" id="leaveDate" min="">
+          <input type="date" id="leaveDate">
+          <div class="small">請假日期只能選今天或未來日期。</div>
         </div>
 
         <div class="row">
@@ -400,6 +401,14 @@
       return document.getElementById("empid").value.trim();
     }
 
+    function getTodayInputValue_() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
     function getCurrentMonthRange() {
       const today = new Date();
       const y = today.getFullYear();
@@ -448,10 +457,20 @@
       });
     }
 
+    function initLeaveDateLimit() {
+      const todayStr = getTodayInputValue_();
+      const leaveDateEl = document.getElementById("leaveDate");
+      if (leaveDateEl) {
+        leaveDateEl.min = todayStr;
+        leaveDateEl.value = todayStr;
+      }
+    }
+
     async function initApp() {
       try {
         showPage(getPage());
         initMissDateOptions();
+        initLeaveDateLimit();
 
         await liff.init({ liffId: LIFF_ID });
 
@@ -470,10 +489,6 @@
         const m = String(now.getMonth() + 1).padStart(2, "0");
         const queryMonthEl = document.getElementById("queryMonth");
         if (queryMonthEl) queryMonthEl.value = `${y}${m}`;
-
-        const monthRange = getCurrentMonthRange();
-        const leaveDateEl = document.getElementById("leaveDate");
-        if (leaveDateEl) leaveDateEl.value = monthRange.first;
 
         const who = await jsonpRequest({
           action: "whoami",

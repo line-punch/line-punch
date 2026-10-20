@@ -55,3 +55,8 @@ Status: design and isolated development only. **Do not deploy to production or m
 - Periodically import official Taiwan government calendar as a proposed baseline, with source/version, last-sync timestamp, and failure alerts. Official calendar is not automatically binding on private-company schedules.
 - Company-specific overrides have precedence; approved Saturday workdays can be selected for leave, weekends/holidays designated off cannot.
 - No silent automatic changes to previously approved leave; validate on submission and approval against the effective calendar.
+
+## Confirmed default for government-announced Saturday make-up days
+- Company normally follows officially announced Saturday make-up workdays; mark those Saturdays as working days by default and permit leave applications.
+- Company-specific exceptions can override the default, with an audit trail.
+- Confirm the official calendar's applicability and effective dates before importing; never blindly treat all government office schedules as legally binding for a private company.

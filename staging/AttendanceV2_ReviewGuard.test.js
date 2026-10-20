@@ -19,13 +19,14 @@ function fixture(opts={}) {
   const ctx={
     SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:()=>sheet}),flush:()=>{}},
     Utilities:{formatDate:()=> '2026/10/20 12:00:00'},
+    getManagers_:(empId)=>empId==='E01'?{boss:'boss123'}:{},
     combineDateTime_:(_d,t)=>t==='09:00'?new Date('2026-11-02T01:00:00Z'):null,
     Date,Error,isNaN
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(__dirname+'/AttendanceV2_ReviewGuard.gs','utf8'),ctx);
   const lock={tryLock:()=>!opts.busy,releaseLock:()=>release++};
-  return {call:(d='核准',n='REQ1')=>ctx.v2Decide_(kind,n,d,'主管A',lock),
+  return {call:(d='核准',n='REQ1',actor='boss123')=>ctx.v2Decide_(kind,n,d,actor,'主管A',lock),
     state:()=>({rows,writes,release})};
 }
 let count=0;
@@ -40,6 +41,7 @@ test('submitted at preserved',()=>{const t=fixture();t.call();assert.equal(t.sta
 test('miss punch approval time written',()=>{const t=fixture({kind:'補打卡申請'});t.call();assert.equal(t.state().rows[1][12] instanceof Date,true)});
 test('miss punch rejection clears approval',()=>{const t=fixture({kind:'補打卡申請'});t.call('駁回');assert.equal(t.state().rows[1][12],'')});
 test('invalid punch time rejected',()=>{const t=fixture({kind:'補打卡申請',time:'bad'});assert.throws(()=>t.call(),/無效/);assert.equal(t.state().writes,0)});
+test('unauthorized reviewer rejected',()=>{const t=fixture();assert.throws(()=>t.call('核准','REQ1','wrongUser'),/無審核權限/)});
 test('invalid decision rejected',()=>{const t=fixture();assert.throws(()=>t.call('不明'),/動作/)});
 test('lock released after error',()=>{const t=fixture({duplicate:true});assert.throws(()=>t.call());assert.equal(t.state().release,1)});
 console.log('TOTAL '+count+' tests passed');

@@ -43,3 +43,9 @@ Status: design and isolated development only. **Do not deploy to production or m
 4. iPhone/Android NFC hardware tests and spoof/replay tests.
 5. Review approval/rejection, leave history, GPS failure, unknown network outcome, simultaneous punches.
 6. Owner acceptance, then explicitly approved production deployment with rollback plan.
+
+## Confirmed company calendar policy (2026-10-20)
+- All employees have Saturday/Sunday off; no shift scheduling.
+- Observe Taiwan national holidays. Date ranges must contain only working days; reject any range containing a weekend or applicable national holiday, and require separate leave requests around the break.
+- Maintain a versioned yearly holiday calendar and optional company exceptions (make-up workdays, special closures) rather than hard-coding dates. Do not assume government make-up workdays apply without company confirmation.
+- Determine deducted days on the server; client date picker validation is advisory only.

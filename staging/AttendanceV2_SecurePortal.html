@@ -19,7 +19,7 @@
 <body>
 <main>
   <h1>LINE 安全登入隔離測試</h1>
-  <p>此頁只用來驗證 LINE 身分與個人資料查詢，不提供正式打卡與送出請假功能。</p>
+  <p>此頁只連到獨立測試專案，提供安全登入、個人查詢與測試用 GPS 打卡。不得連接正式員工資料。</p>
   <div class="status" id="status" role="status">尚未開始</div>
   <button id="login" type="button" onclick="start()">驗證 LINE 身分</button>
   <section id="after" hidden>
@@ -28,11 +28,46 @@
     <input id="month" maxlength="6" inputmode="numeric">
     <button id="query" type="button" onclick="queryRecords()">查詢我的出勤紀錄</button>
     <div class="status" id="records">尚未查詢</div>
+    <hr>
+    <h2>測試 GPS 打卡</h2>
+    <p>只操作測試用的 Google Sheet，實際時間由後端產生。</p>
+    <button id="clockIn" type="button" onclick="testClock('上班')">測試上班打卡</button>
+    <button id="clockOut" type="button" onclick="testClock('下班')">測試下班打卡</button>
+    <button id="clockCheck" type="button" onclick="checkClockStatus()">確認上一筆打卡結果</button>
+    <div class="status" id="clockStatus" role="status">尚未送出測試打卡</div>
   </section>
 </main>
 <script>
   const LIFF_ID=<?!= JSON.stringify(liffId) ?>;
   let idToken='';
+  let clockBusy=false;
+  const pendingKey='attendance-v2-test-clock';
+  function requestId(){
+    if(window.crypto?.randomUUID)return window.crypto.randomUUID();
+    if(!window.crypto?.getRandomValues)throw Error('無法產生安全打卡編號');
+    const bytes=new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  function pending(){
+    try{return JSON.parse(sessionStorage.getItem(pendingKey)||'null');}catch(_e){return null;}
+  }
+  function pendingSet(value){
+    sessionStorage.setItem(pendingKey,JSON.stringify(value));
+  }
+  function busyClock(value){
+    clockBusy=value;
+    ['clockIn','clockOut','clockCheck'].forEach(id=>$(id).disabled=value);
+  }
+  function obtainGPS(){
+    return new Promise((resolve,reject)=>{
+      if(!navigator.geolocation)return reject(Error('此裝置不支援定位'));
+      navigator.geolocation.getCurrentPosition(
+        p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),
+        e=>reject(Error('定位失敗：'+(e?.message||'無法取得位置'))),
+        {enableHighAccuracy:true,timeout:12000,maximumAge:0});
+    });
+  }
   const $=id=>document.getElementById(id);
   function callGAS(method,payload){
     return new Promise((resolve,reject)=>{
@@ -69,6 +104,50 @@
         $('month').value=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0');
       }catch(e){$('status').textContent='驗證尚未完成：'+(e.message||String(e))}
     });
+  }
+  async function testClock(type){
+    if(clockBusy)return;
+    busyClock(true);
+    const box=$('clockStatus');
+    try{
+      if(pending()){
+        box.textContent='上一筆打卡尚未確認，請先查詢結果，不要再次送出。';
+        return;
+      }
+      box.textContent='正在取得 GPS 定位…';
+      const gps=await obtainGPS();
+      const request={requestId:requestId(),type,lat:gps.lat,lng:gps.lng};
+      pendingSet(request);
+      box.textContent='正在送出測試打卡…';
+      const r=await callGAS('v2ClockSecure',{idToken,...request});
+      if(r.ok&&r.found){
+        sessionStorage.removeItem(pendingKey);
+        box.textContent='✅ '+r.message+'\n'+r.date+' '+r.time+'｜'+r.type;
+      }else if(r.code==='ALREADY_CLOCKED'){
+        sessionStorage.removeItem(pendingKey);
+        box.textContent='⚠️ '+r.message;
+      }else box.textContent='⚠️ 結果尚未確認，請先查詢';
+    }catch(e){
+      box.textContent=pending()
+        ? '⚠️ 送出結果尚未確認：'+(e.message||String(e))+'\n請查詢上一筆結果。'
+        : '尚未送出：'+(e.message||String(e));
+    }finally{busyClock(false)}
+  }
+  async function checkClockStatus(){
+    if(clockBusy)return;
+    busyClock(true);
+    const box=$('clockStatus');
+    try{
+      const request=pending();
+      if(!request){box.textContent='沒有待確認的打卡';return;}
+      box.textContent='正在確認打卡結果…';
+      const r=await callGAS('v2ClockStatusSecure',{idToken,requestId:request.requestId});
+      if(r.ok&&r.found){
+        sessionStorage.removeItem(pendingKey);
+        box.textContent='✅ 打卡已確認：'+r.date+' '+r.time+'｜'+r.type;
+      }else box.textContent='尚未找到紀錄，可能仍在寫入，請稍後再次查詢。';
+    }catch(e){box.textContent='查詢失敗，請稍後重試：'+(e.message||String(e));}
+    finally{busyClock(false);}
   }
   async function queryRecords(){
     await working($('query'),async()=>{

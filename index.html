@@ -119,6 +119,8 @@
         <div class="value" id="employeeInfo">讀取中...</div>
       </div>
 
+      <div id="identityError" class="msg hidden" role="alert"></div>
+
       <div id="bindBox" class="row hidden">
         <div class="label">首次綁定員工ID</div>
         <input type="text" id="empid" placeholder="第一次請輸入員工ID，例如 YT001">
@@ -208,12 +210,12 @@
         <div class="row">
           <div class="label">請假日期</div>
           <input type="date" id="leaveDate">
+          <div class="small">開始日期只能選今天或未來日期。</div>
         </div>
         <div class="row">
           <div class="label">請假結束日期（全天可連續多日）</div>
           <input type="date" id="leaveEndDate">
           <div class="small">請假期間不得包含非工作日；由後端工作日曆檢查。</div>
-          <div class="small">請假日期只能選今天或未來日期。</div>
         </div>
 
         <div class="row">
@@ -474,7 +476,7 @@
         leaveDateEl.min = todayStr;
         leaveDateEl.value = todayStr;
         const endEl = document.getElementById("leaveEndDate");
-        if (endEl) { endEl.min = todayStr; endEl.value = todayStr; leaveDateEl.addEventListener("change",()=>{endEl.min=leaveDateEl.value;if(endEl.value<leaveDateEl.value)endEl.value=leaveDateEl.value;}); }
+        if (endEl) { endEl.min = todayStr; endEl.value = todayStr; leaveDateEl.addEventListener("change",()=>{endEl.min=leaveDateEl.value;if(endEl.value<leaveDateEl.value || endEl.disabled)endEl.value=leaveDateEl.value;}); }
       }
     }
 
@@ -507,6 +509,7 @@
           userId: lineUserId
         });
 
+        document.getElementById("identityError").classList.add("hidden");
         if (who.ok && who.bound) {
           renderEmployeeInfo(who.employee);
           hideBindMode();
@@ -519,7 +522,9 @@
           setBindMsg("尚未綁定，請先輸入員工ID完成首次綁定。");
         } else {
           hideBindMode();
-          setMsg("身分查詢異常，請稍後重試；不需要重新綁定。");
+          const errBox=document.getElementById("identityError");
+          errBox.classList.remove("hidden");
+          errBox.textContent="員工身分查詢異常，請稍後重新開啟；不需要重新綁定。";
         }
 
         if (currentPage === "clock") {
@@ -530,6 +535,9 @@
 
       } catch (err) {
         setLoading("");
+        const errBox=document.getElementById("identityError");
+        errBox.classList.remove("hidden");
+        errBox.textContent="初始化失敗：" + getErrorMessage(err);
         setMsg("初始化失敗：" + getErrorMessage(err));
       }
     }
@@ -650,7 +658,7 @@
 
       } catch (err) {
         setLoading("");
-        setMsg("送出失敗：" + getErrorMessage(err));
+        setMsg("⚠️ 打卡結果尚未確認：" + getErrorMessage(err) + "\n請先使用出勤查詢確認，不要立即重複打卡。");
       }
     }
 
@@ -691,7 +699,7 @@
           setMissMsg("❌ " + (result.message || "補打卡送出失敗"));
         }
       } catch (err) {
-        setMissMsg("送出失敗：" + getErrorMessage(err));
+        setMissMsg("⚠️ 補打卡結果尚未確認：" + getErrorMessage(err) + "\n請先查看補打卡紀錄，不要立即重送。");
       }
     }
 
@@ -755,6 +763,26 @@
       }
     }
 
+    // Keep a stable request ID for the same form within one LIFF session.
+    // Never save personal leave details in sessionStorage.
+    function v2LeaveRequestId_(fields) {
+      const text=JSON.stringify(fields);
+      let hash=2166136261;
+      for(let i=0;i<text.length;i++){hash=Math.imul(hash ^ text.charCodeAt(i),16777619);}
+      const fingerprint=(hash>>>0).toString(16);
+      const key="yc-v2-pending-leave";
+      let saved=null;
+      try { saved=JSON.parse(sessionStorage.getItem(key)||"null"); } catch(_e){}
+      if(saved && saved.fingerprint===fingerprint && saved.id) return saved.id;
+      const id=(window.crypto && window.crypto.randomUUID)
+        ? window.crypto.randomUUID()
+        : Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);
+      try {sessionStorage.setItem(key,JSON.stringify({fingerprint,id}));}catch(_e){}
+      return id;
+    }
+    function v2ClearLeaveRequest_() {
+      try {sessionStorage.removeItem("yc-v2-pending-leave");}catch(_e){}
+    }
     async function submitLeave() {
       const empid = getActiveEmpid();
       const leaveDate = document.getElementById("leaveDate").value;
@@ -780,6 +808,7 @@
         return;
       }
 
+      const requestId=v2LeaveRequestId_({empid,leaveDate,endDate,type,unit,startTime,endTime,reason});
       setLeaveMsg("送出中...");
 
       try {
@@ -791,6 +820,7 @@
           leaveDate: leaveDate,
           startDate: leaveDate,
           endDate: endDate,
+          requestId: requestId,
           type: type,
           unit: unit,
           startTime: startTime,
@@ -799,13 +829,14 @@
         });
 
         if (result.ok) {
-          setLeaveMsg("✅ " + (result.message || "請假申請已送出"));
+          v2ClearLeaveRequest_();
+          setLeaveMsg("✅ " + (result.message || "請假申請已送出") + (result.no ? "\n申請單號：" + result.no : ""));
           loadLeaveHistory();
         } else {
           setLeaveMsg("❌ " + (result.message || "請假送出失敗"));
         }
       } catch (err) {
-        setLeaveMsg("送出失敗：" + getErrorMessage(err));
+        setLeaveMsg("⚠️ 送出結果尚未確認：" + getErrorMessage(err) + "\n請先查看申請紀錄。若重新送出，測試版會沿用相同請求識別碼。");
       }
     }
 

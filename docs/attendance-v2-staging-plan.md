@@ -97,3 +97,32 @@ Status: design and isolated development only. **Do not deploy to production or m
   later reproducible validation.
 - No release until authenticated transport/webhook verification and end-to-end
   tests on a separate Apps Script deployment and copied Sheet are complete.
+
+## Security prototype checkpoint (2026-10-20 evening)
+- Added `staging/AttendanceV2_Auth.gs` and `staging/AttendanceV2_Auth.test.js`:
+  LINE ID tokens are verified server-side via LINE OAuth2 verify API, using
+  `LINE_LOGIN_CHANNEL_ID` from Apps Script script properties, before deriving
+  employee identity and allowing leave submission or attendance queries.
+  A caller-supplied employee ID is not trusted. Attendance query is restricted
+  to the authenticated employee and current plus previous two months.
+- Added `staging/AttendanceV2_SecureReview.gs` to support an authenticated
+  LIFF manager review flow. The old unsigned webhook's ability to approve/reject
+  is a release-blocking vulnerability until retired.
+- Added `staging/AttendanceV2_Bind.gs` and companion mock test; first-time
+  binding requires a single-use invitation code, limited attempts and a
+  verified LINE identity. Existing bindings cannot be overwritten on request.
+  Invitation issuance and secure re-binding remain TODO before deployment.
+- Added `staging/AttendanceV2_TestEntry.gs` and
+  `staging/AttendanceV2_SecurePortal.html`, designed ONLY for a separate
+  Apps Script test project and a separate staging LIFF app. Never point the
+  production LIFF app at an untested Apps Script URL.
+- Local isolated test runs of development equivalents: LINE auth 14/14;
+  invitation-binding 15/15. This is NOT a verified LINE API, Google
+  `google.script.run`, or iPhone/Android integration result.
+- **Public repository notice:** never commit access tokens, employee records,
+  invite code values, script properties, payroll figures or private test data.
+- **Further blockers:** confirm LINE LIFF behavior with Apps Script HTMLService
+  test URL; create copied test spreadsheet; retire vulnerable legacy JSONP GET
+  writes and unsigned webhook decisions; add authenticated clock and missed
+  punch APIs; complete notification outbox, NFC verification, real testing and
+  explicit owner acceptance.

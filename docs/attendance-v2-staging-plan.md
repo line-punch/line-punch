@@ -49,3 +49,9 @@ Status: design and isolated development only. **Do not deploy to production or m
 - Observe Taiwan national holidays. Date ranges must contain only working days; reject any range containing a weekend or applicable national holiday, and require separate leave requests around the break.
 - Maintain a versioned yearly holiday calendar and optional company exceptions (make-up workdays, special closures) rather than hard-coding dates. Do not assume government make-up workdays apply without company confirmation.
 - Determine deducted days on the server; client date picker validation is advisory only.
+
+## Saturday make-up working days
+- Do not blanket-block Saturdays. Resolve each date using an authoritative company working-day calendar.
+- Periodically import official Taiwan government calendar as a proposed baseline, with source/version, last-sync timestamp, and failure alerts. Official calendar is not automatically binding on private-company schedules.
+- Company-specific overrides have precedence; approved Saturday workdays can be selected for leave, weekends/holidays designated off cannot.
+- No silent automatic changes to previously approved leave; validate on submission and approval against the effective calendar.

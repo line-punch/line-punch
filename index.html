@@ -88,6 +88,8 @@
       min-height:20px;
       margin-top:14px;
     }
+    button:active{transform:scale(.985);filter:brightness(.93)}
+    button:disabled{opacity:.65;cursor:wait}
     .hidden{ display:none !important; }
     .page{ display:none; }
     .page.active{ display:block; }
@@ -206,6 +208,11 @@
         <div class="row">
           <div class="label">請假日期</div>
           <input type="date" id="leaveDate">
+        </div>
+        <div class="row">
+          <div class="label">請假結束日期（全天可連續多日）</div>
+          <input type="date" id="leaveEndDate">
+          <div class="small">請假期間不得包含非工作日；由後端工作日曆檢查。</div>
           <div class="small">請假日期只能選今天或未來日期。</div>
         </div>
 
@@ -336,6 +343,8 @@
     function toggleLeaveMode() {
       const unit = document.getElementById("leaveUnit").value;
       document.getElementById("hourBox").classList.toggle("hidden", unit !== "時數");
+      const endEl=document.getElementById("leaveEndDate");
+      if(endEl){endEl.disabled=unit==="時數";if(unit==="時數")endEl.value=document.getElementById("leaveDate").value;}
     }
 
     function buildQuery(params) {
@@ -464,6 +473,8 @@
       if (leaveDateEl) {
         leaveDateEl.min = todayStr;
         leaveDateEl.value = todayStr;
+        const endEl = document.getElementById("leaveEndDate");
+        if (endEl) { endEl.min = todayStr; endEl.value = todayStr; leaveDateEl.addEventListener("change",()=>{endEl.min=leaveDateEl.value;if(endEl.value<leaveDateEl.value)endEl.value=leaveDateEl.value;}); }
       }
     }
 
@@ -503,9 +514,12 @@
           if (currentPage === "leave") loadLeaveHistory();
           if (currentPage === "miss") loadMissHistory();
 
-        } else {
+        } else if (who.ok === true && who.bound === false) {
           showBindMode();
           setBindMsg("尚未綁定，請先輸入員工ID完成首次綁定。");
+        } else {
+          hideBindMode();
+          setMsg("身分查詢異常，請稍後重試；不需要重新綁定。");
         }
 
         if (currentPage === "clock") {
@@ -744,6 +758,7 @@
     async function submitLeave() {
       const empid = getActiveEmpid();
       const leaveDate = document.getElementById("leaveDate").value;
+      const endDate = document.getElementById("leaveEndDate").value || leaveDate;
       const type = document.getElementById("leaveType").value;
       const unit = document.getElementById("leaveUnit").value;
       const startTime = document.getElementById("leaveStartTime").value;
@@ -758,6 +773,8 @@
         setLeaveMsg("請完整填寫請假資料。");
         return;
       }
+      if (endDate < leaveDate) { setLeaveMsg("結束日期不可早於開始日期。"); return; }
+      if (unit === "時數" && endDate !== leaveDate) { setLeaveMsg("指定時段請假限單日。"); return; }
       if (unit === "時數" && (!startTime || !endTime)) {
         setLeaveMsg("請輸入開始時間與結束時間。");
         return;
@@ -772,6 +789,8 @@
           name: profileName,
           userId: lineUserId,
           leaveDate: leaveDate,
+          startDate: leaveDate,
+          endDate: endDate,
           type: type,
           unit: unit,
           startTime: startTime,

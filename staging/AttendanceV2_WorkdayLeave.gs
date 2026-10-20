@@ -42,16 +42,17 @@ function v2WorkCalendar_() {
  * all dates in the request interval (including weekends) to avoid silently
  * treating a national holiday as an ordinary weekday.
  */
-function v2ValidateLeaveRange_(startText,endText,unit) {
+function v2ValidateLeaveRange_(startText,endText,unit,calendarOverride,todayOverride) {
   const start = v2Ymd_(startText);
   const end = v2Ymd_(endText || startText);
   if (end.date < start.date) throw new Error('結束日期不可早於開始日期');
-  const today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
+  const today = todayOverride || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
   if (start.key < today) throw new Error('請假不可選過去日期');
   const days = Math.round((end.date - start.date)/86400000)+1;
   if (days > 31) throw new Error('單張請假最多31個日曆天，請拆單');
   if (unit !== '全天' && days !== 1) throw new Error('非全天請假僅能申請單日');
-  const calendar = v2WorkCalendar_();
+  if (unit !== '全天' && unit !== '時數' && unit !== '上午' && unit !== '下午') throw new Error('不支援的請假單位');
+  const calendar = calendarOverride || v2WorkCalendar_();
   const invalid = [];
   for (let i=0;i<days;i++) {
     const d = new Date(start.date.getTime()+i*86400000);
@@ -71,7 +72,10 @@ function v2ValidateLeaveRange_(startText,endText,unit) {
 function v2LeaveRow_(no,employee,leaveType,unit,range,reason,nowText,startTime,endTime) {
   let quantity;
   if (unit === '全天') quantity = range.days + '天';
-  else if (unit === '時數') quantity = startTime + '-' + endTime;
+  else if (unit === '時數') {
+    if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(startTime || '') || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(endTime || '') || startTime >= endTime) throw new Error('請假時間區間錯誤');
+    quantity = startTime + '-' + endTime;
+  }
   else quantity = unit;
   return [
     no,employee.employeeId,employee.name,leaveType,

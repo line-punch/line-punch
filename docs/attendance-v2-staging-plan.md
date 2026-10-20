@@ -28,7 +28,7 @@ Status: design and isolated development only. **Do not deploy to production or m
 ### B. Multi-day leave
 - Add startDate/endDate with single-day and hourly leave backward compatibility.
 - One request, one approval. Show both dates in manager notice, employee history and approval response.
-- Date validity, overlaps, workdays/holidays, half-day and cross-midnight rules must be confirmed before automatic deducted-day calculation.
+- Confirmed policy: a leave request may cover only consecutive scheduled working days; nonworking days must not fall inside its date range. Example Friday plus Monday–Tuesday requires two requests, totaling three working days. The UI must reject a range containing rest days once the authoritative work schedule is known. Do not infer weekends are always rest days; verify schedules and holidays. Overlaps, half-day and cross-midnight rules still require validation.
 - Preserve existing sheet columns and legacy data; migrations must be reversible.
 
 ### C. Interaction feedback

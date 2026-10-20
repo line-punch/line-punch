@@ -13,7 +13,7 @@
     button{width:100%;border:0;border-radius:12px;background:#26755a;color:#fff;padding:14px;margin-top:12px;font-size:16px}
     button:disabled{background:#999}
     .status{background:#eef2f5;padding:12px;border-radius:10px;white-space:pre-wrap}
-    input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #aaa;border-radius:10px;font-size:16px}
+    input,select{box-sizing:border-box;width:100%;padding:12px;border:1px solid #aaa;border-radius:10px;font-size:16px;margin-top:6px}
   </style>
 </head>
 <body>
@@ -35,12 +35,26 @@
     <button id="clockOut" type="button" onclick="testClock('下班')">測試下班打卡</button>
     <button id="clockCheck" type="button" onclick="checkClockStatus()">確認上一筆打卡結果</button>
     <div class="status" id="clockStatus" role="status">尚未送出測試打卡</div>
+    <hr>
+    <h2>主管審核測試</h2>
+    <p>這裡只能操作隔離測試用的申請單，必須由後端確認主管權限。</p>
+    <select id="reviewType" aria-label="申請類型">
+      <option value="leave">請假申請</option>
+      <option value="miss">補打卡申請</option>
+    </select>
+    <label for="reviewNo">測試申請單號</label>
+    <input id="reviewNo" placeholder="請輸入測試申請單號">
+    <button id="reviewLoad" type="button" onclick="loadReview()">查看測試申請</button>
+    <div class="status" id="reviewStatus" role="status">尚未讀取測試申請</div>
+    <button id="reviewApprove" disabled type="button" onclick="submitReview('核准')">核准</button>
+    <button id="reviewReject" disabled type="button" onclick="submitReview('駁回')">駁回</button>
   </section>
 </main>
 <script>
   const LIFF_ID=<?!= JSON.stringify(liffId) ?>;
   let idToken='';
   let clockBusy=false;
+  let reviewBusy=false,reviewCase=null;
   const pendingKey='attendance-v2-test-clock';
   function requestId(){
     if(window.crypto?.randomUUID)return window.crypto.randomUUID();
@@ -148,6 +162,48 @@
       }else box.textContent='尚未找到紀錄，可能仍在寫入，請稍後再次查詢。';
     }catch(e){box.textContent='查詢失敗，請稍後重試：'+(e.message||String(e));}
     finally{busyClock(false);}
+  }
+  function reviewLocked(value){
+    reviewBusy=value;
+    $('reviewLoad').disabled=value;
+    $('reviewApprove').disabled=value || !reviewCase || reviewCase.status!=='待審核';
+    $('reviewReject').disabled=value || !reviewCase || reviewCase.status!=='待審核';
+  }
+  async function loadReview(){
+    if(reviewBusy)return;
+    reviewCase=null;
+    reviewLocked(true);
+    const box=$('reviewStatus');
+    try{
+      box.textContent='正在讀取並確認主管權限…';
+      const type=$('reviewType').value,no=$('reviewNo').value.trim();
+      const r=await callGAS('v2ReviewDetailsSecure',{idToken,type,no});
+      if(!r.ok){box.textContent='查無此測試申請';return;}
+      reviewCase={type,no,status:r.status};
+      box.textContent='姓名：'+r.employeeName+'\n類型：'+
+        (r.leaveType||r.punchType||'')+'\n日期：'+
+        r.startDate+(r.endDate?' 至 '+r.endDate:'')+
+        '\n狀態：'+r.status;
+    }catch(e){box.textContent='讀取失敗：'+(e.message||String(e));}
+    finally{reviewLocked(false)}
+  }
+  async function submitReview(decision){
+    if(reviewBusy||!reviewCase||reviewCase.status!=='待審核')return;
+    reviewLocked(true);
+    const box=$('reviewStatus');
+    try{
+      box.textContent='正在'+decision+'，請勿重複點擊…';
+      const r=await callGAS('v2ReviewSecure',{
+        idToken,type:reviewCase.type,no:reviewCase.no,decision});
+      if(!r.ok)throw Error('審核尚未完成');
+      reviewCase.status=r.status;
+      box.textContent=r.changed?'✅ 已完成'+r.status:
+        'ℹ️ 此申請先前已處理，目前狀態：'+r.status;
+    }catch(e){
+      box.textContent='⚠️ 審核結果尚未確認：'+(e.message||String(e))+
+        '\n請重新載入申請狀態，不要立即再按其他審核動作。';
+      reviewCase=null;
+    }finally{reviewLocked(false)}
   }
   async function queryRecords(){
     await working($('query'),async()=>{

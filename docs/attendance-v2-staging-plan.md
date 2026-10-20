@@ -83,3 +83,17 @@ Status: design and isolated development only. **Do not deploy to production or m
   official full-year calendar import, durable notification outbox, phone testing, or
   end-to-end payroll/leave history regression yet.
 - No production branch, LIFF endpoint, live Sheet, or deployed Apps Script was changed.
+
+## Additional staging work
+- Frontend now uses stable session-scoped request IDs for leave submissions and displays
+  an "unconfirmed" state on write-request network errors instead of claiming failure.
+- Added AttendanceV2_DgpaCalendar.gs and isolated test script. Parser validates
+  all 365/366 dates, known holiday codes (0/2), duplicate/missing dates, leap
+  years and company override records. This is a pure parser, NOT automatic sync.
+- Official calendar reference: https://data.gov.tw/dataset/14718
+- Local mock tests: review 12/12, leave submission 10/10, calendar 10/10.
+  These were run against local equivalent development code, not a deployed GAS
+  project or a live phone/LINE test; repository test scripts are committed for
+  later reproducible validation.
+- No release until authenticated transport/webhook verification and end-to-end
+  tests on a separate Apps Script deployment and copied Sheet are complete.

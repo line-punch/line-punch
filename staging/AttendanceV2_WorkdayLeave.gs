@@ -73,7 +73,7 @@ function v2LeaveRow_(no,employee,leaveType,unit,range,reason,nowText,startTime,e
   let quantity;
   if (unit === '全天') quantity = range.days + '天';
   else if (unit === '時數') {
-    if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(startTime || '') || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(endTime || '') || startTime >= endTime) throw new Error('請假時間區間錯誤');
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime || '') || startTime >= endTime) throw new Error('請假時間區間錯誤');
     quantity = startTime + '-' + endTime;
   }
   else quantity = unit;

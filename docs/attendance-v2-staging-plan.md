@@ -126,3 +126,24 @@ Status: design and isolated development only. **Do not deploy to production or m
   writes and unsigned webhook decisions; add authenticated clock and missed
   punch APIs; complete notification outbox, NFC verification, real testing and
   explicit owner acceptance.
+
+## GPS request recovery checkpoint
+- \`staging/AttendanceV2_Clock.gs\` adds verified LINE identity, GPS radius
+  enforcement, LockService serialisation, idempotent request IDs in existing
+  attendance column K and a read-only status query using the SAME request ID.
+- \`staging/AttendanceV2_Clock.test.js\` supplies synthetic test cases.
+- \`staging/AttendanceV2_SecurePortal.html\` contains a TEST-only GPS UI:
+  pressing a button records the request ID in sessionStorage, sends one
+  request via \`google.script.run\`, and shows an "unconfirmed" outcome on
+  transport errors. Pending status is verified before allowing another punch.
+- Static syntax check of eight current Apps Script staging modules passed.
+  Eight additional direct mocked checks against the exact committed clock
+  helper source passed (first write, replay, daily duplicate, GPS rejection,
+  concurrency lock and authoritative status query).
+- Known limitations: no dedicated safe retry UI after a genuinely missing
+  request; handling overnight work, GPS spoofing, session loss, and notification
+  queuing remains pending. All status checks can fail temporarily, and a
+  missing record does NOT prove that the write failed.
+- Current secure test portal uses Apps Script HTMLService; compatibility of
+  that hosting approach with LIFF on both iOS and Android is not yet verified.
+- Live LIFF and deployed GAS remain unchanged; DO NOT merge to main.

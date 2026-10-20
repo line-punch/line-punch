@@ -60,3 +60,26 @@ Status: design and isolated development only. **Do not deploy to production or m
 - Company normally follows officially announced Saturday make-up workdays; mark those Saturdays as working days by default and permit leave applications.
 - Company-specific exceptions can override the default, with an audit trail.
 - Confirm the official calendar's applicability and effective dates before importing; never blindly treat all government office schedules as legally binding for a private company.
+
+## V2 development checkpoint — 2026-10-20
+- Branch contains staged frontend changes (leave start/end, persistent per-form transaction ID,
+  click-in-progress feedback, visible identity errors, unknown outcome handling).
+- Added AttendanceV2_SubmitLeave.gs helper. It stores a request ID in the existing
+  application number column A to make retries idempotent; 12-column layout unchanged.
+- Added AttendanceV2_ReviewGuard.gs helper. The reviewer must match the server-side
+  manager list for the request owner. Review state is checked and updated under one lock.
+- Added Node mock tests: AttendanceV2_ReviewGuard.test.js and
+  AttendanceV2_SubmitLeave.test.js, alongside a standalone GAS leave validator test.
+  Mock-based local logic checks are NOT a replacement for integration tests.
+- The government source candidate for official workday calendar is DGPA dataset 14718
+  at https://data.gov.tw/dataset/14718 ; field "是否放假": 0 = workday, 2 = holiday.
+  Calendar importer, yearly sync and company overrides remain unimplemented.
+- **Security release blockers**: The current production interface sends state-changing
+  JSONP GET requests using client-provided employee/LINE IDs; this does not authenticate
+  the employee. The current Apps Script doPost handler also lacks validated webhook
+  authenticity. Do not wire these staging helpers to production until an authenticated,
+  non-JSONP request path and verified review source are established.
+- **Operational release blockers**: no staged GAS web deployment, copied test spreadsheet,
+  official full-year calendar import, durable notification outbox, phone testing, or
+  end-to-end payroll/leave history regression yet.
+- No production branch, LIFF endpoint, live Sheet, or deployed Apps Script was changed.

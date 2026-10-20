@@ -1,8 +1,8 @@
 /** Staging only. Never call before trusted webhook source and reviewer authorization have been verified. */
-function v2Decide_(sheetName, requestNo, decision, reviewerName, lock) {
+function v2Decide_(sheetName, requestNo, decision, reviewerLineId, reviewerName, lock) {
   if (['請假申請','補打卡申請'].indexOf(sheetName) === -1) throw Error('不支援的申請類型');
   if (['核准','駁回'].indexOf(decision) === -1) throw Error('不支援的審核動作');
-  if (!requestNo || !reviewerName) throw Error('缺少審核資訊');
+  if (!requestNo || !reviewerLineId || !reviewerName) throw Error('缺少審核資訊');
   if (!lock.tryLock(15000)) throw Error('審核忙碌，請稍後再試');
   try {
     const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
@@ -13,6 +13,8 @@ function v2Decide_(sheetName, requestNo, decision, reviewerName, lock) {
     if(matches.length>1) throw Error('申請單號重複，暫停審核');
     if(!matches.length) return {ok:false,code:'NOT_FOUND'};
     const i=matches[0],old=String(rows[i][8]).trim();
+    const manager=getManagers_(String(rows[i][1]).trim());
+    if (!manager || manager.boss!==reviewerLineId) throw Error('無審核權限');
     if(old==='核准'||old==='駁回') return {ok:true,changed:false,status:old,code:'ALREADY_REVIEWED'};
     if(old!=='待審核') throw Error('申請狀態不正確');
     const now=Utilities.formatDate(new Date(),'Asia/Taipei','yyyy/MM/dd HH:mm:ss');
@@ -31,6 +33,7 @@ function v2Decide_(sheetName, requestNo, decision, reviewerName, lock) {
   }
 }
 /* Before integration: validate webhook authenticity at trusted entrypoint,
- * resolve reviewer identity and permissions server-side, then call this helper.
+ * pass the verified reviewer identity; this helper checks the request's boss reviewer from the sheet.
+ * Source authenticity must still be verified before invoking.
  * Send LINE notifications only after database state is committed.
  * Never deploy without review, replay, authorization and concurrent tests. */

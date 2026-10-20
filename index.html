@@ -892,6 +892,33 @@
       }
     }
 
+
+    // One request per action at a time. Feedback is entirely client-side.
+    // A transport timeout does not prove that a write failed.
+    const pendingActions = new Set();
+    function installButtonFeedback(name) {
+      const fn = window[name];
+      if (typeof fn !== "function") return;
+      window[name] = async function(...args) {
+        if (pendingActions.has(name)) return;
+        pendingActions.add(name);
+        const buttons = [...document.querySelectorAll("button")];
+        const states = buttons.map(btn => ({btn, disabled:btn.disabled}));
+        const caller = window.event && window.event.target && window.event.target.closest
+          ? window.event.target.closest("button") : null;
+        const previousText = caller ? caller.textContent : "";
+        if (caller) caller.textContent = "處理中…";
+        buttons.forEach(btn => { btn.disabled = true; });
+        try { return await fn.apply(this,args); }
+        finally {
+          states.forEach(({btn,disabled})=>{btn.disabled=disabled;});
+          if(caller) caller.textContent=previousText;
+          pendingActions.delete(name);
+        }
+      };
+    }
+    ["bindEmployee","punch","submitMiss","submitLeave","queryAttendance","loadMissHistory","loadLeaveHistory"].forEach(installButtonFeedback);
+
     initApp();
   </script>
   

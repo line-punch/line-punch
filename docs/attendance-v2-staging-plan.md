@@ -147,3 +147,23 @@ Status: design and isolated development only. **Do not deploy to production or m
 - Current secure test portal uses Apps Script HTMLService; compatibility of
   that hosting approach with LIFF on both iOS and Android is not yet verified.
 - Live LIFF and deployed GAS remain unchanged; DO NOT merge to main.
+
+## Supervisor review integration decision
+- The staging HTMLService portal now has test-only supervisor look-up, approve,
+  and reject controls with busy/unknown-outcome feedback. It uses
+  \`v2ReviewDetailsSecure\` and \`v2ReviewSecure\`, not unsigned webhook postback.
+- The LIVE Messaging API channel currently sends supervisor postback events to
+  Apps Script \`doPost\`. Google Apps Script Web App event objects do not expose
+  inbound HTTP request headers, so direct \`doPost\` cannot verify LINE's
+  mandatory \`x-line-signature\` authenticity. This is a production security
+  release blocker. Official references:
+  https://developers.google.com/apps-script/guides/web
+  https://developers.line.biz/en/docs/messaging-api/verify-webhook-signature/
+- Preferred migration: new manager Flex cards link to a verified-LIFF review
+  page; after switching, remove state-changing webhook postback handling.
+  If other webhook events must remain, put a verified signature-checking proxy
+  in front of Apps Script instead. Do not emulate header checks in GAS.
+- Whether Apps Script HTMLService can function as a LIFF endpoint reliably on
+  both phone OSes is still unconfirmed and requires hardware tests.
+- Static compilation of staged supervisor portal's JavaScript passed.
+- No existing official channel, webhook, live LIFF endpoint or spreadsheet changed.

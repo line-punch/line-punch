@@ -50,7 +50,7 @@ const context={
   Date,Math,Number,Map,Set,Array,Object,Error,RegExp,String,JSON
 };
 const names=['v2InstallSyntheticFixture_','v2WhoamiSecure','v2TestOptInLineIdentity',
-  'v2SubmitLeaveSecure','v2LeaveHistorySecure','v2ReviewDetailsSecure',
+  'v2SubmitLeaveSecure','v2SubmitLeaveResult','v2LeaveHistorySecure','v2ReviewDetailsSecure',
   'v2ReviewSecure','v2ClockSecure','v2ClockStatusSecure','v2LeaveStatusSecure'];
 const api=new Function(...Object.keys(context),
   src+'\nreturn {'+names.join(',')+'};')(...Object.values(context));
@@ -81,6 +81,19 @@ test('approved decision cannot be reversed',()=>assert.equal(
   api.v2ReviewSecure({idToken:token,type:'leave',no,decision:'駁回'}).changed,false));
 test('weekend leave rejected',()=>assert.throws(()=>api.v2SubmitLeaveSecure({
   ...base,requestId:'otherleave1234567',startDate:'2026-11-06',endDate:'2026-11-09'}),/休息日/));
+test('nonworkday returns actionable validation response',()=>{
+  const r=api.v2SubmitLeaveResult({...base,requestId:'holiday1234567890',
+    startDate:'2026-11-06',endDate:'2026-11-09'});
+  assert.equal(r.code,'VALIDATION');assert.equal(r.persisted,false);
+});
+test('corrected dates can be submitted after validation rejection',()=>{
+  const id='correctedtest1234567';
+  const denied=api.v2SubmitLeaveResult({...base,requestId:id,startDate:'2026-11-06',endDate:'2026-11-09'});
+  assert.equal(denied.code,'VALIDATION');
+  const accepted=api.v2SubmitLeaveResult({...base,requestId:id});
+  assert.equal(accepted.ok,true);assert.equal(accepted.days,2);
+});
+
 const clock={idToken:token,requestId:'clocktest12345678',type:'上班',lat:0,lng:0};
 test('real-world coordinates rejected in synthetic location',()=>assert.throws(()=>
   api.v2ClockSecure({...clock,lat:25,lng:121}),/超出/));

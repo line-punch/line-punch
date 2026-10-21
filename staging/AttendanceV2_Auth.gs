@@ -4,6 +4,8 @@
  * Required script property: LINE_LOGIN_CHANNEL_ID. Never log ID tokens.
  */
 function v2VerifyLineClaims_(idToken) {
+  // Fail closed if these staging modules are copied into the wrong project.
+  v2AssertTestSheet_();
   const token = String(idToken || '');
   if (token.length < 30 || token.length > 8192 || token.split('.').length !== 3)
     throw new Error('LINE 登入資訊無效，請重新登入');

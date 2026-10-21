@@ -4,7 +4,7 @@ const fs=require('node:fs'),vm=require('node:vm');
 const src=fs.readFileSync(__dirname+'/AttendanceV2_FormPostBridge.gs','utf8');
 let guards=0,verifyCalls=0;
 const calls={
-  whoami(p){verifyCalls++;if(p.idToken!=='valid-id-token')throw Error('LINE 驗證失敗');return {ok:true,bound:false}},
+  whoami(p){verifyCalls++;if(p.idToken!=='valid-id-token-with-a-synthetic-test-suffix-1234567')throw Error('LINE 驗證失敗');return {ok:true,bound:false}},
   attendance(){return {ok:true}},
   clock(){return {ok:true}},
   clockStatus(){return {ok:true}},
@@ -30,7 +30,7 @@ const ctx={
 vm.createContext(ctx);vm.runInContext(src,ctx);
 const nonce='a'.repeat(40);let count=0;
 function ok(name,fn){fn();count++;console.log('PASS '+name)}
-function parameters(extra={}){return {nonce,operation:'whoami',payload:JSON.stringify({idToken:'valid-id-token'}),...extra}}
+function parameters(extra={}){return {nonce,operation:'whoami',payload:JSON.stringify({idToken:'valid-id-token-with-a-synthetic-test-suffix-1234567'}),...extra}}
 ok('verified test user accepted',()=>{const r=ctx.v2BridgeRequest_(parameters());assert.equal(r.result.ok,true)});
 ok('invalid/empty token rejected',()=>assert.throws(()=>ctx.v2BridgeRequest_(parameters({payload:JSON.stringify({idToken:'bad'})})),/驗證失敗/));
 ok('bad nonce rejected',()=>assert.throws(()=>ctx.v2BridgeRequest_(parameters({nonce:'short'})),/請求識別無效/));
@@ -39,7 +39,7 @@ ok('reject invalid JSON',()=>assert.throws(()=>ctx.v2BridgeRequest_(parameters({
 ok('doPost success response does not echo ID token',()=>{
  const page=ctx.doPost({parameter:parameters()});
  assert.equal(page.mode,'ALLOWALL');
- assert.equal(page.html.includes('valid-id-token'),false);
+ assert.equal(page.html.includes('valid-id-token-with-a-synthetic-test-suffix-1234567'),false);
  assert.equal(page.html.includes('YC_V2_STAGING_FORM_V1'),true);
  assert.equal(page.html.includes('https://line-punch.github.io'),true);
 });

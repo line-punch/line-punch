@@ -427,6 +427,36 @@ function v2SubmitLeave_(p,employee){
 /* Do not connect this to legacy JSONP/GET. Complete verified identity, secure
  * transport and durable notification-outbox handling before any deployment. */
 
+/** Typed validation response for the test UI.
+ * Known input errors return a clear non-write result. Any unexpected exception
+ * stays an unknown outcome until requestId status is queried.
+ */
+function v2SubmitLeaveResult(payload) {
+  try {
+    return v2SubmitLeaveSecure(payload);
+  } catch(error) {
+    const message=String(error&&error.message||'');
+    const patterns=[
+      /^請假區間包含休息日：/,
+      /^請假不可選過去日期$/,
+      /^結束日期不可早於開始日期$/,
+      /^日期格式錯誤$/,
+      /^日期不存在$/,
+      /^單張請假最多31個日曆天/,
+      /^非全天請假僅能申請單日$/,
+      /^不支援的請假單位$/,
+      /^請假時間區間錯誤$/,
+      /^請選擇有效假別$/
+    ];
+    if(patterns.some(re=>re.test(message))) {
+      return {ok:false,code:'VALIDATION',message,
+        persisted:false};
+    }
+    // In particular never report "failed" for a write or network exception.
+    throw error;
+  }
+}
+
 
 // =============================
 // AttendanceV2_LeaveHistory.gs

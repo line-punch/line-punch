@@ -236,7 +236,12 @@
       try{
         payload.requestId=pendingLeaveRequest(leaveFingerprint(payload));
         box.textContent='正在提交測試請假單…';
-        const r=await callGAS('v2SubmitLeaveSecure',{idToken,...payload});
+        const r=await callGAS('v2SubmitLeaveResult',{idToken,...payload});
+        if(!r.ok && r.code==='VALIDATION'){
+          sessionStorage.removeItem(leavePendingKey);
+          box.textContent='❌ 請假資料不符合規則：'+r.message+'\n請修改後再送出。';
+          return;
+        }
         if(!r.ok)throw Error('後端未確認成功');
         sessionStorage.removeItem(leavePendingKey);
         box.textContent='✅ '+r.message+'\n期間：'+r.startDate+' 至 '+r.endDate+

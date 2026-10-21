@@ -62,3 +62,35 @@ LINE 登入說明：<https://developers.line.biz/en/docs/liff/developing-liff-ap
 - 測試員工自願綁定目前僅供隔離測試，在放寬任何人可存取權限前，
   須再限制誰可以綁定模擬員工，避免陌生使用者搶先占用測試帳號。
 - 不在 GitHub 儲存任何 LINE Channel Secret、ID Token、個資、密碼。
+
+## 2026-10-21 最新驗證與下一階段
+
+**真實 LINE 登入前端測試已通過。** 使用者已透過個人 LINE 開發者帳號取得測試 Channel 權限，並在 GitHub Pages 測試頁看到「✅ LINE 登入已在瀏覽器完成」。這不代表後端已驗證或可進行打卡。
+
+- 新測試 repo：`line-punch/attendance-v2-test`；已啟用 GitHub Pages。
+- 測試 LIFF Endpoint：`https://line-punch.github.io/attendance-v2-test/`，且使用 `2012136707-2dDU0aSJ`。
+- GitHub Pages **main** 仍為僅前端登入測試，`enableServerVerification:false`。
+- `attendance-v2-test` 中獨立的新分支
+  `feature/verify-only-backend-probe-20261021` 已準備下一階段客戶端驗證，但尚未發佈。
+- 此倉庫內 `staging/AttendanceV2_FormPostBridge.gs` 已改為**只有 `verify` 一個唯讀操作**，
+  不包含 clock/leave/review/bind。後端只回傳 `{ok:true,verified:true}`，
+  不回傳 LINE userId、員工名稱、ID Token 或其他個資。
+- 安全測試：最新唯讀橋接器 12/12 模擬案例通過（包含拒絕寫入、未啟用時拒絕、token 資料不回傳）。
+- **尚未安裝/部署** read-only `doPost` 到測試 GAS，現有測試部署無需重建資料表。
+- 橋接程式另需測試 GAS Script Property `ATTENDANCE_V2_BRIDGE_MODE=verify_only`，
+  否則拒絕所有操作。測試 GAS 既有兩個檔案不必重貼。
+
+### 跨網站真實測試順序
+
+1. 將 `AttendanceV2_FormPostBridge.gs` 新增至 **獨立** GAS 測試專案（不能加入正式專案）。
+2. 設定 `ATTENDANCE_V2_BRIDGE_MODE=verify_only`；保留所有既有測試 Sheet、Channel、LIFF 設定。
+3. **先維持** GAS 部署「誰可以存取：只有我自己」，使用同一 Google 登入的桌機測試跨網站請求是否能收到回覆。
+4. 僅在權限與 `doGet` 舊測試入口的安全性審核完成、使用者同意後，才考慮將測試 Web App 改為 `Anyone`。
+5. 再將測試 GitHub Pages 的已準備登入後端分支發布到新 repo 的 main，從桌機／手機驗證。
+6. 若發生逾時，要記錄「結果未確認」而非宣稱登入或寫入失敗。此階段**沒有任何寫入操作**。
+
+### 已知權限風險
+
+測試 GAS 專案仍含多個受 LINE Token 驗證的業務入口，以及舊 HTMLService `doGet`。
+若直接改成 `Anyone`，即使唯讀 `doPost` 限制操作，其餘入口可能仍暴露；
+正式擴大存取前必須先隔離或封閉這些入口。不能因為單元測試通過而忽略這點。

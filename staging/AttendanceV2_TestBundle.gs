@@ -6,9 +6,9 @@
  * All user data in v2InstallSyntheticFixture_() are synthetic.
  */
 
-// =====================================
+// =============================
 // AttendanceV2_TestFixture.gs
-// =====================================
+// =============================
 /**
  * Isolated test spreadsheet schema generator ONLY.
  * Absolutely never call from a production spreadsheet or Apps Script project.
@@ -95,9 +95,9 @@ function v2TestOptInLineIdentity(payload) {
 }
 
 
-// =====================================
+// =============================
 // AttendanceV2_TestCompat.gs
-// =====================================
+// =============================
 /** Test-only compatibility functions. Do NOT copy the production Code.gs.
  * Each helper refuses to operate unless the active Sheet is a V2 test fixture.
  */
@@ -172,9 +172,9 @@ function nowInfo_(){
  */
 
 
-// =====================================
+// =============================
 // AttendanceV2_WorkdayLeave.gs
-// =====================================
+// =============================
 /**
  * Attendance V2 staged Apps Script helpers.
  * NOT DEPLOYED. Review and integrate into the actual Code.gs in a test project.
@@ -272,9 +272,9 @@ function v2LeaveRow_(no,employee,leaveType,unit,range,reason,nowText,startTime,e
  */
 
 
-// =====================================
+// =============================
 // AttendanceV2_Auth.gs
-// =====================================
+// =============================
 /**
  * ATTENDANCE V2 - STAGING ONLY. Do not deploy into the existing JSONP /exec.
  * Use from an isolated Apps Script HTMLService page via google.script.run.
@@ -373,9 +373,9 @@ function v2QueryAttendanceSecure(payload) {
  * A separate test deployment and full mobile compatibility test are required.
  */
 
-// =====================================
+// =============================
 // AttendanceV2_SubmitLeave.gs
-// =====================================
+// =============================
 /** STAGING ONLY: caller must supply employee verified by a trusted server-side identity check.
  * Original 12-column leave schema is kept. Transaction ID is encoded in column A.
  */
@@ -428,9 +428,9 @@ function v2SubmitLeave_(p,employee){
  * transport and durable notification-outbox handling before any deployment. */
 
 
-// =====================================
+// =============================
 // AttendanceV2_LeaveHistory.gs
-// =====================================
+// =============================
 /**
  * Attendance V2 staging - secure self-service leave history.
  * Never trust employeeId from a mobile client; derive employee from verified token.
@@ -460,10 +460,44 @@ function v2LeaveHistorySecure(payload) {
 /* App test must verify only own employee records are returned,
  * and old rows with one date are shown as a single-day interval. */
 
+/** Confirm a previously submitted leave request using its immutable request ID.
+ * Not-found is NOT proof of failed submission; the original write may be running.
+ */
+function v2LeaveStatusSecure(payload) {
+  const employee=v2AuthenticatedEmployee_(payload&&payload.idToken);
+  if(!employee.bound)throw Error('LINE 尚未綁定員工');
+  const requestId=String(payload&&payload.requestId||'').trim();
+  if(!/^[A-Za-z0-9_-]{12,80}$/.test(requestId))
+    throw Error('請假請求識別碼無效');
+  const no='LEAVEV2_'+requestId;
+  const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName('請假申請');
+  if(!sh)throw Error('找不到請假申請表');
+  const rows=sh.getDataRange().getValues();
+  let found=null;
+  for(let i=1;i<rows.length;i++) {
+    const r=rows[i];
+    if(String(r[0]||'').trim()!==no)continue;
+    if(String(r[1]||'').trim()!==employee.employeeId)
+      throw Error('該請求編號與登入員工不符');
+    if(found)throw Error('請假請求編號重複，請聯絡管理員');
+    found=r;
+  }
+  if(!found)return {ok:true,found:false,
+    message:'尚未查到請假資料，可能仍在送出中'};
+  function dateText(value) {
+    if(value instanceof Date) return Utilities.formatDate(value,'Asia/Taipei','yyyy-MM-dd');
+    return String(value||'').trim().replace(/\//g,'-').slice(0,10);
+  }
+  return {ok:true,found:true,no,leaveType:String(found[3]||''),
+    startDate:dateText(found[4]),endDate:dateText(found[5]),
+    quantity:String(found[6]||''),status:String(found[8]||''),
+    message:'請假申請已確認寫入'};
+}
 
-// =====================================
+
+// =============================
 // AttendanceV2_Clock.gs
-// =====================================
+// =============================
 /** STAGING ONLY. Requires verified LINE login and Code.gs GPS helpers.
  * Uses existing 打卡紀錄 columns A:K; K stores LINE-V2:<requestId>.
  * NOT for legacy JSONP GET requests. No production deployment.
@@ -567,9 +601,9 @@ function v2ClockStatusSecure(payload) {
  * iOS/Android LIFF tests. */
 
 
-// =====================================
+// =============================
 // AttendanceV2_ReviewGuard.gs
-// =====================================
+// =============================
 /** Staging only. Never call before trusted webhook source and reviewer authorization have been verified. */
 function v2Decide_(sheetName, requestNo, decision, reviewerLineId, reviewerName, lock) {
   if (['請假申請','補打卡申請'].indexOf(sheetName) === -1) throw Error('不支援的申請類型');
@@ -611,9 +645,9 @@ function v2Decide_(sheetName, requestNo, decision, reviewerLineId, reviewerName,
  * Never deploy without review, replay, authorization and concurrent tests. */
 
 
-// =====================================
+// =============================
 // AttendanceV2_SecureReview.gs
-// =====================================
+// =============================
 /**
  * Staging-only reviewer API. Use ONLY from Apps Script HTMLService.
  * Display these actions in an authenticated LIFF review page.
@@ -670,9 +704,9 @@ function v2ReviewSecure(payload) {
  * - Run a copied-Sheet test with two simultaneous reviewers and no real users.
  */
 
-// =====================================
+// =============================
 // AttendanceV2_DgpaCalendar.gs
-// =====================================
+// =============================
 /** STAGING ONLY. Parse official DGPA CSV to [日期, 是否上班, 備註, 來源].
  * Does not fetch remote resources or write production Sheets.
  * Supported DGPA fields: 西元日期/日期, 是否放假, 備註.
@@ -731,9 +765,9 @@ function v2ApplyCompanyDays_(calendarRows,overrides){
 }
 
 
-// =====================================
+// =============================
 // AttendanceV2_Bind.gs
-// =====================================
+// =============================
 /**
  * STAGING ONLY. First-time LINE binding requires a single-use invitation.
  * Test spreadsheet: 員工資料 [員工ID,姓名,手機,LINE userId,公司,部門,狀態]
@@ -810,9 +844,9 @@ function v2BindSecure(payload) {
  * supervised re-binding are available. No birthdate PINs or raw codes in logs. */
 
 
-// =====================================
+// =============================
 // AttendanceV2_TestEntry.gs
-// =====================================
+// =============================
 /**
  * Separate TEST Apps Script project only. Do not add this doGet to production.
  * Script property STAGING_LIFF_ID must refer to a separate LIFF app whose
@@ -836,9 +870,9 @@ function doGet(e) {
  * 5) No real employee data and no live webhook in this project.
  */
 
-// =====================================
+// =============================
 // AttendanceV2_WorkdayLeave.test.gs
-// =====================================
+// =============================
 /** Isolated, read-only tests for AttendanceV2_WorkdayLeave.gs.
  * Run ONLY in a separate Apps Script test project; no spreadsheet writes.
  */

@@ -4,8 +4,8 @@ This folder is NOT production-ready. Never merge or deploy to the live LINE LIFF
 
 ## Test environment requirements
 
-1. Create a COPY of the attendance Google Sheet with **synthetic** test employee rows. Do not share real payroll or employee credentials.
-2. In that copied Sheet, create a **bound Apps Script test project**. The modules below depend on `SpreadsheetApp.getActiveSpreadsheet()`.
+1. Under the intended **yc.yeongacc00** Google account, create a **NEW BLANK** Google Sheet named exactly `YC_ATTENDANCE_V2_TEST_ONLY`. Do **not** copy the live attendance Sheet or any real employee, attendance or payroll data.
+2. From that new blank Sheet, open **Extensions → Apps Script** to create a **bound Apps Script test project**. The modules below depend on `SpreadsheetApp.getActiveSpreadsheet()`. This is separate from the existing live attendance project.
 3. Include the following Apps Script server files in the test project:
    - `AttendanceV2_Auth.gs`
    - `AttendanceV2_WorkdayLeave.gs`
@@ -16,17 +16,17 @@ This folder is NOT production-ready. Never merge or deploy to the live LINE LIFF
    - `AttendanceV2_TestEntry.gs`
    - `AttendanceV2_DgpaCalendar.gs` (parser only; does not sync on its own)
    - `AttendanceV2_Bind.gs` (not enabled until an owner-only invitation issuer is implemented)
-4. Reuse the following helper functions from the **current** verified Code.gs, without copying its `doGet/doPost` or opening a second endpoint: `getEmployeeById_`, `getNearestAllowedLocation_`, `getManagers_`, `getNameByLineUserId_`, `combineDateTime_`, `nowInfo_`, plus their pure dependencies and the `Asia/Taipei` constants.
+   - `AttendanceV2_TestFixture.gs` (requires explicit safety properties)
+   - `AttendanceV2_TestCompat.gs` (the test-only substitutes for live Code.gs helpers)
+   - `AttendanceV2_WorkdayLeave.test.gs` (Apps Script isolated validation tests)
+4. **DO NOT copy production `Code.gs`, `index.html`, `doGet`, `doPost` or secrets.** The test-only `AttendanceV2_TestCompat.gs` provides the needed helper functions, protected by test-sheet guards.
 5. Add `AttendanceV2_SecurePortal.html` as an HTML file named `AttendanceV2_SecurePortal` within the **test** project.
-6. The test sheet should contain matching headers and test rows:
-   - `員工資料`, `上班地點`, `打卡紀錄`, `補打卡申請`, `請假申請`, `審核通知名單`, `工作日曆` and optionally `綁定邀請`.
-   - Fill the workday calendar for every date in the tested leave range, including Saturdays, Sundays and national holidays. Keep the original 12-column leave layout and 11-column attendance layout.
-   - Use only the user's own opted-in test LINE account(s); real staff must not be used for experimental writes.
-7. Set **test script properties** privately: `ATTENDANCE_V2_TEST=enabled`, `LINE_LOGIN_CHANNEL_ID` (numeric LINE Login Channel ID), `STAGING_LIFF_ID` (a **separate staging LIFF ID** with `openid` and `profile` scopes), and for binding experiments `ATTENDANCE_BIND_PEPPER` (strong random secret; do not commit).
-8. Deploy the **test** bound Apps Script as a separate Web App. Configure ONLY the staging LIFF Endpoint URL to its test `/exec` URL. Do not change the production LINE channel, live LIFF app or webhook. Cross-device compatibility of LIFF inside Apps Script HTMLService must be confirmed on iPhone and Android.
+6. Set script properties `ATTENDANCE_V2_TEST=enabled` and `ATTENDANCE_V2_TEST_SHEET_ID=<the exact NEW blank Sheet ID>` **before** running setup. From the Apps Script editor, run `v2InstallSyntheticFixture_()` once. It creates 8 named Sheets and only synthetic `TEST001` employee, a non-functional location at `(0,0)`, and a simulated 2026–2027 work calendar. It refuses execution if the Sheet name/ID does not match or if the spreadsheet contains existing business data. **The fixture calendar is not an official holiday calendar.**
+7. Set remaining **test script properties** privately: `LINE_LOGIN_CHANNEL_ID` (the numeric channel ID of the staging LINE Login Channel), `STAGING_LIFF_ID` (a **separate staging LIFF ID** with `openid` and `profile` scopes). Only for invitation-binding experiments, set `ATTENDANCE_BIND_PEPPER` (strong random secret; do not commit). `v2TestOptInLineIdentity` can bind a consenting **tester's** LINE identity to `TEST001` in the test Sheet only; it does not touch production.
+8. Deploy the **test** bound Apps Script as a separate Web App. Configure ONLY a **separate staging LIFF app** to use its test `/exec` URL. Do not change the production LINE channel, live LIFF app or webhook. To test GPS punching, **first** set a suitable synthetic test location in `上班地點` and only with the consenting tester's permission; `(0,0)` is deliberately unusable. Cross-device compatibility of LIFF inside Apps Script HTMLService must be confirmed on iPhone and Android.
 9. Run `testAttendanceV2Leave_()` in the test project and offline JS unit tests with Node 22:
    `node staging/AttendanceV2_Auth.test.js`, `node staging/AttendanceV2_Bind.test.js`, `node staging/AttendanceV2_Clock.test.js`, `node staging/AttendanceV2_DgpaCalendar.test.js`, `node staging/AttendanceV2_ReviewGuard.test.js`, `node staging/AttendanceV2_SubmitLeave.test.js`.
-10. Real staging integration tests must include login/relogin, first-time binding, GPS denial, timeouts, in-flight duplicate clicks, two simultaneous staff punches, review authorization, second supervisor clicks, old leave history, month rollovers, and restore from a copied Sheet.
+10. Never select or modify the existing live `yc.yeongacc00` attendance Spreadsheet/App Script project. Verify the test title and ID displayed before any installation run. Real staging integration tests must include login/relogin, first-time binding, GPS denial, timeouts, in-flight duplicate clicks, two simultaneous staff punches, review authorization, second supervisor clicks, old leave history, month rollovers, and restore from a copied Sheet.
 
 ## Unresolved release blockers
 
@@ -42,3 +42,11 @@ This folder is NOT production-ready. Never merge or deploy to the live LINE LIFF
 - Other mocked tests run locally in development; run the committed scripts again under the exact test project and keep logs before release.
 
 **Production main branch is not changed by this folder.**
+
+## Latest safe staging checkpoint (2026-10-21)
+- New guarded fixture: `AttendanceV2_TestFixture.gs`; isolated pure helper replacements: `AttendanceV2_TestCompat.gs`.
+- The LINE token verification entry requires `v2AssertTestSheet_()` to pass before processing.
+- The isolated test portal now offers explicit opt-in to link one's own test LINE identity to synthetic `TEST001`.
+- The GPS helper checks idempotent replays before rechecking the phone's GPS; a request that already succeeded can still be confirmed after the device moves or loses location.
+- 9 direct tests against the committed fixture and work-calendar code passed under a synthetic Apps Script mock. This is **not** a deployed-cloud test.
+- Test connection via Google Drive tools was not verified as the intended yc.yeongacc00 Google account; therefore no live Google files or test Sheets were created automatically.

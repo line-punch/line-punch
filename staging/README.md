@@ -6,6 +6,13 @@ This folder is NOT production-ready. Never merge or deploy to the live LINE LIFF
 
 1. Under the intended **yc.yeongacc00** Google account, create a **NEW BLANK** Google Sheet named exactly `YC_ATTENDANCE_V2_TEST_ONLY`. Do **not** copy the live attendance Sheet or any real employee, attendance or payroll data.
 2. From that new blank Sheet, open **Extensions → Apps Script** to create a **bound Apps Script test project**. The modules below depend on `SpreadsheetApp.getActiveSpreadsheet()`. This is separate from the existing live attendance project.
+   **Minimal two-file installation:** instead of copying each helper separately, add
+   `AttendanceV2_TestBundle.gs` as ONE `.gs` file, plus the ONE
+   `AttendanceV2_SecurePortal.html` page (create it as the Apps Script HTML
+   file named `AttendanceV2_SecurePortal`). The bundle already includes the
+   guarded synthetic fixture, all server-side helpers, and the dedicated test
+   entry. **Do not also add the individual files**, or duplicate function
+   declarations will conflict.
 3. Include the following Apps Script server files in the test project:
    - `AttendanceV2_Auth.gs`
    - `AttendanceV2_WorkdayLeave.gs`
@@ -35,6 +42,45 @@ This folder is NOT production-ready. Never merge or deploy to the live LINE LIFF
 - Automatic DGPA yearly calendar sync, holiday overrides administration, NFC dynamic SUN/SDM validation, notification outbox, and recovery policy remain pending.
 - Some cases in the staged HTMLService LIFF approach may fail due to browser/iframe behavior. Confirm with real supported phones before relying on it.
 - Never store LINE access tokens, user ID tokens, or NFC keys in the public repository.
+
+## Recommended next user action (necessary only for cloud integration)
+
+The currently connected Google Drive account in ChatGPT is
+`ruichen0420.system@gmail.com`, **not**
+`yc.yeongacc00@gmail.com`. Therefore no Google files were created under the
+attendance account. Do not create them under the first account or grant it
+access to live employee data just to run tests.
+
+In an authenticated browser session for `yc.yeongacc00@gmail.com`:
+1. Create a **new blank Google Sheet** named
+   `YC_ATTENDANCE_V2_TEST_ONLY`. Do not copy the live attendance sheet.
+2. Give the test sheet an Apps Script project via **Extensions → Apps Script**.
+3. Use the two-file bundle approach above. Do not deploy yet.
+4. Set the test-only properties with the new Sheet ID and an independent
+   staging LINE Login/LIFF application.
+5. Run `v2InstallSyntheticFixture_()` once; only after confirming the
+   test sheet is empty and its ID/name match the safety properties.
+6. Complete isolated integration and phone checks. Do not modify production
+   LIFF Endpoint URL or Webhook URL.
+
+A Google Drive connection alone does not give this chat a way to edit Apps
+Script source; the bound Apps Script test code still requires an authorized
+deployment method or a short one-time manual paste. The test app must not
+be published to real employees.
+
+## Latest verifiable checkpoint
+
+- `AttendanceV2_TestBundle.gs` rebuilt after adding authenticated
+  `v2LeaveStatusSecure` and classified `v2SubmitLeaveResult`.
+- `AttendanceV2_SecurePortal.html` supports secure test login, explicit
+  test identity opt-in, GPS test clock, after-timeout status lookup,
+  continuous working-day leave, typed validation feedback, leave-status
+  confirmation and supervisor review.
+- The committed `AttendanceV2_IntegrationMock.test.js` passed 18/18 in
+  a synthetic backend test runner, with no real LINE/Google API calls.
+- JavaScript syntax of the committed HTML test portal passed.
+- **Cloud Apps Script, staging LIFF, iPhone/Android and NFC tests not yet done.**
+- The GitHub `main` branch is not part of this staging deployment.
 
 ## Current independent checks
 - Staging Apps Script module syntax: 8/8 compile checks passed against committed source.

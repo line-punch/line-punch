@@ -37,18 +37,6 @@ function v2ClockSecure(payload) {
   const requestId=v2ClockRequestId_(payload);
   const type=String(payload&&payload.type||'').trim();
   if(type!=='上班' && type!=='下班')throw Error('不支援的打卡類型');
-  if(payload.lat==null || payload.lng==null) throw Error('尚未取得 GPS 定位');
-  const lat=Number(payload.lat),lng=Number(payload.lng);
-  if(!Number.isFinite(lat)||!Number.isFinite(lng)||
-      lat< -90||lat>90||lng< -180||lng>180)
-    throw Error('GPS 定位資料無效');
-  const employee=getEmployeeById_(identity.employeeId);
-  if(!employee||employee.lineUserId!==identity.lineUserId||
-      (employee.status&&employee.status!=='在職'))
-    throw Error('員工資料狀態不正確');
-  const nearest=getNearestAllowedLocation_(employee,lat,lng);
-  if(!nearest)throw Error('找不到可打卡地點');
-  if(nearest.distance>nearest.allowDistance)throw Error('超出打卡允許範圍');
   const lock=LockService.getScriptLock();
   if(!lock.tryLock(15000))throw Error('打卡系統忙碌，請稍後確認紀錄');
   try {
@@ -56,7 +44,25 @@ function v2ClockSecure(payload) {
     if(!sh)throw Error('找不到打卡紀錄表');
     const rows=sh.getDataRange().getValues();
     const previous=v2ClockFind_(rows,identity.employeeId,requestId);
-    if(previous)return v2ClockSummary_(previous,true);
+    if(previous) {
+      if(String(previous[5]||'').trim()!==type)
+        throw Error('此請求編號已用於其他打卡類型');
+      return v2ClockSummary_(previous,true);
+    }
+    // First-time request only: validate the current GPS coordinates and employee location.
+    // A replay can be confirmed even if GPS is now unavailable or the employee moved.
+    if(payload.lat==null || payload.lng==null) throw Error('尚未取得 GPS 定位');
+    const lat=Number(payload.lat),lng=Number(payload.lng);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)||
+        lat< -90||lat>90||lng< -180||lng>180)
+      throw Error('GPS 定位資料無效');
+    const employee=getEmployeeById_(identity.employeeId);
+    if(!employee||employee.lineUserId!==identity.lineUserId||
+        (employee.status&&employee.status!=='在職'))
+      throw Error('員工資料狀態不正確');
+    const nearest=getNearestAllowedLocation_(employee,lat,lng);
+    if(!nearest)throw Error('找不到可打卡地點');
+    if(nearest.distance>nearest.allowDistance)throw Error('超出打卡允許範圍');
     const now=nowInfo_();
     for(let i=1;i<rows.length;i++){
       const row=rows[i];

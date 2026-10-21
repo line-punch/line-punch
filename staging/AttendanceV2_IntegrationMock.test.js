@@ -51,7 +51,7 @@ const context={
 };
 const names=['v2InstallSyntheticFixture_','v2WhoamiSecure','v2TestOptInLineIdentity',
   'v2SubmitLeaveSecure','v2LeaveHistorySecure','v2ReviewDetailsSecure',
-  'v2ReviewSecure','v2ClockSecure','v2ClockStatusSecure'];
+  'v2ReviewSecure','v2ClockSecure','v2ClockStatusSecure','v2LeaveStatusSecure'];
 const api=new Function(...Object.keys(context),
   src+'\nreturn {'+names.join(',')+'};')(...Object.values(context));
 const token='headerABCDEF.payloadABCDEFGHI.signature0123456789';
@@ -67,6 +67,12 @@ test('two-day leave',()=>{const r=api.v2SubmitLeaveSecure(base);no=r.no;assert.e
 test('repeated leave not duplicated',()=>{assert.equal(api.v2SubmitLeaveSecure(base).alreadySubmitted,true);
   assert.equal(ss.getSheetByName('請假申請').rows.length,2)});
 test('own history',()=>assert.equal(api.v2LeaveHistorySecure({idToken:token}).data[0].quantity,'2天'));
+test('authoritative leave submission status',()=>{const r=api.v2LeaveStatusSecure({
+  idToken:token,requestId:base.requestId});assert.equal(r.found,true);
+  assert.equal(r.quantity,'2天');assert.equal(r.no,no)});
+test('unsubmitted leave request status remains unknown',()=>{const r=api.v2LeaveStatusSecure({
+  idToken:token,requestId:'somethingnew12345678'});assert.equal(r.found,false)});
+
 test('manager reviews own test application',()=>assert.equal(
   api.v2ReviewDetailsSecure({idToken:token,type:'leave',no}).status,'待審核'));
 test('manager approval',()=>assert.equal(

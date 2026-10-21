@@ -16,6 +16,7 @@ function fixture(opts={}){
     ['','2026/09/30','17:30','T001','','下班','','HQ']];
   let submitted=null;
   const context={Date,Math,Object,Number,String,Error,RegExp,
+    v2AssertTestSheet_:()=>true, // isolated test-only guard mock
     PropertiesService:{getScriptProperties:()=>({getProperty:()=> '2009482137'})},
     UrlFetchApp:{fetch:(url,request)=>{calls.push({url,request});return {
       getResponseCode:()=>opts.status||200,

@@ -5,9 +5,8 @@
  */
 function doGet(e) {
   const properties=PropertiesService.getScriptProperties();
-  if (properties.getProperty('ATTENDANCE_V2_TEST')!=='enabled') {
-    return HtmlService.createHtmlOutput('V2 測試環境尚未啟用');
-  }
+  try { v2AssertTestSheet_(); }
+  catch(_) { return HtmlService.createHtmlOutput('非隔離測試環境，已拒絕載入'); }
   const template=HtmlService.createTemplateFromFile('AttendanceV2_SecurePortal');
   template.liffId=properties.getProperty('STAGING_LIFF_ID')||'';
   return template.evaluate().setTitle('員工打卡 V2 安全驗證測試');

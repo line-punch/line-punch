@@ -180,6 +180,16 @@
         if(!r.ok||!r.bound)throw Error('測試身分尚未啟用');
         $('employee').textContent='已驗證：'+r.employee.name+'（'+r.employee.employeeId+'）';
         $('after').hidden=false;
+        const d=new Date(),ymd=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+
+          '-'+String(d.getDate()).padStart(2,'0');
+        $('month').value=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0');
+        $('leaveStart').min=ymd;$('leaveStart').value=ymd;
+        $('leaveEnd').min=ymd;$('leaveEnd').value=ymd;
+        $('leaveStart').addEventListener('change',()=>{
+          $('leaveEnd').min=$('leaveStart').value;
+          if($('leaveEnd').value<$('leaveStart').value || $('leaveEnd').disabled)
+            $('leaveEnd').value=$('leaveStart').value;
+        });
         box.textContent='可以開始在隔離試算表中執行測試';
       }catch(e){box.textContent='測試身分設定失敗：'+(e.message||String(e));}
     });

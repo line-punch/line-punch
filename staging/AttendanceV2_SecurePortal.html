@@ -70,6 +70,7 @@
     <label for="leaveReason">請假原因／備註</label>
     <input id="leaveReason" maxlength="150" placeholder="請填寫測試原因">
     <button id="leaveSend" type="button" onclick="submitTestLeave()">送出測試請假單</button>
+    <button id="leaveStatusBtn" type="button" onclick="checkTestLeaveStatus()">確認上一筆請假是否送達</button>
     <button id="leaveHistoryBtn" type="button" onclick="loadTestLeaveHistory()">重新整理我的請假紀錄</button>
     <div class="status" id="leaveStatus" role="status">尚未送出測試請假</div>
     <div class="status" id="leaveHistory">尚未查詢請假紀錄</div>
@@ -208,7 +209,11 @@
     let item=null;
     try{item=JSON.parse(sessionStorage.getItem(leavePendingKey)||'null');}
     catch(_e){}
-    if(item && item.fingerprint===fingerprint && item.id)return item.id;
+    if(item && item.id){
+      if(item.fingerprint!==fingerprint)
+        throw Error('上一張請假單尚未確認；請先按「確認上一筆請假是否送達」。');
+      return item.id;
+    }
     const id=requestId();
     sessionStorage.setItem(leavePendingKey,JSON.stringify({fingerprint,id}));
     return id;
@@ -228,8 +233,8 @@
       if(unit==='時數'&&startDate!==endDate){
         box.textContent='指定時段請假限單日';return;
       }
-      payload.requestId=pendingLeaveRequest(leaveFingerprint(payload));
       try{
+        payload.requestId=pendingLeaveRequest(leaveFingerprint(payload));
         box.textContent='正在提交測試請假單…';
         const r=await callGAS('v2SubmitLeaveSecure',{idToken,...payload});
         if(!r.ok)throw Error('後端未確認成功');
@@ -241,7 +246,32 @@
         await loadTestLeaveHistory();
       }catch(e){
         box.textContent='⚠️ 送出結果尚未確認：'+(e.message||String(e))+
-          '\n請先重新整理請假紀錄。使用相同表單重試，會沿用相同請求編號。';
+          '\n請先查詢上一筆請假狀態；相同表單重送會沿用原編號。';
+      }
+    });
+  }
+  async function checkTestLeaveStatus(){
+    await working($('leaveStatusBtn'),async()=>{
+      const box=$('leaveStatus');
+      let item=null;
+      try{item=JSON.parse(sessionStorage.getItem(leavePendingKey)||'null');}catch(_e){}
+      if(!item||!item.id){box.textContent='沒有待確認的請假請求';return;}
+      box.textContent='正在用原請求編號確認請假狀態…';
+      try{
+        const r=await callGAS('v2LeaveStatusSecure',{idToken,requestId:item.id});
+        if(!r.ok)throw Error('後端未完成查詢');
+        if(r.found){
+          sessionStorage.removeItem(leavePendingKey);
+          box.textContent='✅ 已確認請假單寫入｜'+r.no+
+            '\n'+r.startDate+' 至 '+r.endDate+'｜'+r.quantity+'｜'+r.status;
+          $('reviewType').value='leave';$('reviewNo').value=r.no;
+          await loadTestLeaveHistory();
+        }else{
+          box.textContent='⚠️ 尚未查到這張請假單，原請求可能仍在處理中。請稍後再次確認。';
+        }
+      }catch(e){
+        box.textContent='⚠️ 無法確認請假結果：'+(e.message||String(e))+
+          '\n保留原請求編號，請稍後重試。';
       }
     });
   }

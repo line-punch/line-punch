@@ -120,9 +120,10 @@ test('doGet provides plain text only',()=>{
  assert.equal(r.mime,'TEXT');assert.equal(r.html,undefined);
 });
 test('no public employee or Sheet APIs included',()=>{
+ const executable=src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,'');
  for(const op of ['SpreadsheetApp.', 'v2ClockSecure','v2SubmitLeaveSecure',
    'v2ReviewSecure','getEmployeeById_','v2BindSecure','google.script.run']){
-   assert.equal(src.includes(op),false,'Found '+op);
+   assert.equal(executable.includes(op),false,'Found '+op);
  }
 });
 console.log('TOTAL '+count+' passed');

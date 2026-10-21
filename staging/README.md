@@ -4,7 +4,7 @@ This folder is NOT production-ready. Never merge or deploy to the live LINE LIFF
 
 ## Test environment requirements
 
-1. Under the intended **yc.yeongacc00** Google account, create a **NEW BLANK** Google Sheet named exactly `YC_ATTENDANCE_V2_TEST_ONLY`. Do **not** copy the live attendance Sheet or any real employee, attendance or payroll data.
+1. Under the intended **the dedicated attendance account** Google account, create a **NEW BLANK** Google Sheet named exactly `YC_ATTENDANCE_V2_TEST_ONLY`. Do **not** copy the live attendance Sheet or any real employee, attendance or payroll data.
 2. From that new blank Sheet, open **Extensions → Apps Script** to create a **bound Apps Script test project**. The modules below depend on `SpreadsheetApp.getActiveSpreadsheet()`. This is separate from the existing live attendance project.
    **Minimal two-file installation:** instead of copying each helper separately, add
    `AttendanceV2_TestBundle.gs` as ONE `.gs` file, plus the ONE
@@ -33,7 +33,7 @@ This folder is NOT production-ready. Never merge or deploy to the live LINE LIFF
 8. Deploy the **test** bound Apps Script as a separate Web App. Configure ONLY a **separate staging LIFF app** to use its test `/exec` URL. Do not change the production LINE channel, live LIFF app or webhook. To test GPS punching, **first** set a suitable synthetic test location in `上班地點` and only with the consenting tester's permission; `(0,0)` is deliberately unusable. Cross-device compatibility of LIFF inside Apps Script HTMLService must be confirmed on iPhone and Android.
 9. Run `testAttendanceV2Leave_()` in the test project and offline JS unit tests with Node 22:
    `node staging/AttendanceV2_Auth.test.js`, `node staging/AttendanceV2_Bind.test.js`, `node staging/AttendanceV2_Clock.test.js`, `node staging/AttendanceV2_DgpaCalendar.test.js`, `node staging/AttendanceV2_ReviewGuard.test.js`, `node staging/AttendanceV2_SubmitLeave.test.js`.
-10. Never select or modify the existing live `yc.yeongacc00` attendance Spreadsheet/App Script project. Verify the test title and ID displayed before any installation run. Real staging integration tests must include login/relogin, first-time binding, GPS denial, timeouts, in-flight duplicate clicks, two simultaneous staff punches, review authorization, second supervisor clicks, old leave history, month rollovers, and restore from a copied Sheet.
+10. Never select or modify the existing live `the dedicated attendance account` attendance Spreadsheet/App Script project. Verify the test title and ID displayed before any installation run. Real staging integration tests must include login/relogin, first-time binding, GPS denial, timeouts, in-flight duplicate clicks, two simultaneous staff punches, review authorization, second supervisor clicks, old leave history, month rollovers, and restore from a copied Sheet.
 
 ## Unresolved release blockers
 
@@ -46,12 +46,12 @@ This folder is NOT production-ready. Never merge or deploy to the live LINE LIFF
 ## Recommended next user action (necessary only for cloud integration)
 
 The currently connected Google Drive account in ChatGPT is
-`ruichen0420.system@gmail.com`, **not**
-`yc.yeongacc00@gmail.com`. Therefore no Google files were created under the
+`the connected non-attendance account`, **not**
+`the dedicated attendance account`. Therefore no Google files were created under the
 attendance account. Do not create them under the first account or grant it
 access to live employee data just to run tests.
 
-In an authenticated browser session for `yc.yeongacc00@gmail.com`:
+In an authenticated browser session for `the dedicated attendance account`:
 1. Create a **new blank Google Sheet** named
    `YC_ATTENDANCE_V2_TEST_ONLY`. Do not copy the live attendance sheet.
 2. Give the test sheet an Apps Script project via **Extensions → Apps Script**.
@@ -95,4 +95,4 @@ be published to real employees.
 - The isolated test portal now offers explicit opt-in to link one's own test LINE identity to synthetic `TEST001`.
 - The GPS helper checks idempotent replays before rechecking the phone's GPS; a request that already succeeded can still be confirmed after the device moves or loses location.
 - 9 direct tests against the committed fixture and work-calendar code passed under a synthetic Apps Script mock. This is **not** a deployed-cloud test.
-- Test connection via Google Drive tools was not verified as the intended yc.yeongacc00 Google account; therefore no live Google files or test Sheets were created automatically.
+- Test connection via Google Drive tools was not verified as the intended the dedicated attendance account Google account; therefore no live Google files or test Sheets were created automatically.

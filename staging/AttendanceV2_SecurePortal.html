@@ -22,6 +22,11 @@
   <p>此頁只連到獨立測試專案，提供安全登入、個人查詢與測試用 GPS 打卡。不得連接正式員工資料。</p>
   <div class="status" id="status" role="status">尚未開始</div>
   <button id="login" type="button" onclick="start()">驗證 LINE 身分</button>
+  <section id="testConsent" hidden>
+    <p>這是隔離測試環境。如果你同意，可以把自己的 LINE 身分
+    綁到一筆名為「模擬員工甲」的測試資料。此操作不會更改正式員工綁定。</p>
+    <button id="optIn" type="button" onclick="optInTest()">同意作為隔離環境測試者</button>
+  </section>
   <section id="after" hidden>
     <p><strong id="employee"></strong></p>
     <label for="month">查詢月份（當月及前兩個月）</label>
@@ -108,15 +113,33 @@
         const r=await callGAS('v2WhoamiSecure',{idToken});
         if(!r.ok)throw Error('後端驗證未成功');
         if(!r.bound){
-          $('status').textContent='此測試 LINE 尚未綁定員工；不會自動建立綁定';
+          $('status').textContent='尚未建立隔離測試身分，不會修改正式員工帳號。';
+          $('testConsent').hidden=false;
           return;
         }
+        $('testConsent').hidden=true;
         $('employee').textContent='已驗證：'+r.employee.name+'（'+r.employee.employeeId+'）';
         $('status').textContent='LINE 身分驗證成功，可查看個人測試出勤';
         $('after').hidden=false;
         const d=new Date();
         $('month').value=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0');
       }catch(e){$('status').textContent='驗證尚未完成：'+(e.message||String(e))}
+    });
+  }
+  async function optInTest(){
+    await working($('optIn'),async()=>{
+      const box=$('status');
+      try{
+        box.textContent='正在建立隔離測試身分…';
+        await callGAS('v2TestOptInLineIdentity',{idToken});
+        $('testConsent').hidden=true;
+        box.textContent='測試身分設定完成，正在驗證…';
+        const r=await callGAS('v2WhoamiSecure',{idToken});
+        if(!r.ok||!r.bound)throw Error('測試身分尚未啟用');
+        $('employee').textContent='已驗證：'+r.employee.name+'（'+r.employee.employeeId+'）';
+        $('after').hidden=false;
+        box.textContent='可以開始在隔離試算表中執行測試';
+      }catch(e){box.textContent='測試身分設定失敗：'+(e.message||String(e));}
     });
   }
   async function testClock(type){

@@ -41,6 +41,39 @@
     <button id="clockCheck" type="button" onclick="checkClockStatus()">確認上一筆打卡結果</button>
     <div class="status" id="clockStatus" role="status">尚未送出測試打卡</div>
     <hr>
+    <h2>測試連續多日請假</h2>
+    <p>測試日曆為模擬資料。若起訖範圍含休息日，系統會拒絕並要求分開送單。</p>
+    <label for="leaveStart">請假開始日期</label>
+    <input type="date" id="leaveStart">
+    <label for="leaveEnd">請假結束日期</label>
+    <input type="date" id="leaveEnd">
+    <label for="leaveType">假別</label>
+    <select id="leaveType">
+      <option value="特休">特休</option>
+      <option value="事假">事假</option>
+      <option value="病假">病假</option>
+      <option value="婚假">婚假</option>
+      <option value="喪假">喪假</option>
+      <option value="公假">公假</option>
+    </select>
+    <label for="leaveUnit">請假方式</label>
+    <select id="leaveUnit" onchange="toggleLeaveTime()">
+      <option value="全天">整天／連續多日</option>
+      <option value="時數">指定時段（單日）</option>
+    </select>
+    <div id="leaveTimeBox" hidden>
+      <label for="leaveTimeStart">開始時間</label>
+      <input type="time" id="leaveTimeStart" value="09:00">
+      <label for="leaveTimeEnd">結束時間</label>
+      <input type="time" id="leaveTimeEnd" value="18:00">
+    </div>
+    <label for="leaveReason">請假原因／備註</label>
+    <input id="leaveReason" maxlength="150" placeholder="請填寫測試原因">
+    <button id="leaveSend" type="button" onclick="submitTestLeave()">送出測試請假單</button>
+    <button id="leaveHistoryBtn" type="button" onclick="loadTestLeaveHistory()">重新整理我的請假紀錄</button>
+    <div class="status" id="leaveStatus" role="status">尚未送出測試請假</div>
+    <div class="status" id="leaveHistory">尚未查詢請假紀錄</div>
+    <hr>
     <h2>主管審核測試</h2>
     <p>這裡只能操作隔離測試用的申請單，必須由後端確認主管權限。</p>
     <select id="reviewType" aria-label="申請類型">
@@ -60,6 +93,7 @@
   let idToken='';
   let clockBusy=false;
   let reviewBusy=false,reviewCase=null;
+  const leavePendingKey='attendance-v2-test-pending-leave';
   const pendingKey='attendance-v2-test-clock';
   function requestId(){
     if(window.crypto?.randomUUID)return window.crypto.randomUUID();
@@ -121,8 +155,16 @@
         $('employee').textContent='已驗證：'+r.employee.name+'（'+r.employee.employeeId+'）';
         $('status').textContent='LINE 身分驗證成功，可查看個人測試出勤';
         $('after').hidden=false;
-        const d=new Date();
+        const d=new Date(),ymd=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+
+          '-'+String(d.getDate()).padStart(2,'0');
         $('month').value=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0');
+        $('leaveStart').min=ymd;$('leaveStart').value=ymd;
+        $('leaveEnd').min=ymd;$('leaveEnd').value=ymd;
+        $('leaveStart').addEventListener('change',()=>{
+          $('leaveEnd').min=$('leaveStart').value;
+          if($('leaveEnd').value<$('leaveStart').value || $('leaveEnd').disabled)
+            $('leaveEnd').value=$('leaveStart').value;
+        });
       }catch(e){$('status').textContent='驗證尚未完成：'+(e.message||String(e))}
     });
   }
@@ -140,6 +182,70 @@
         $('after').hidden=false;
         box.textContent='可以開始在隔離試算表中執行測試';
       }catch(e){box.textContent='測試身分設定失敗：'+(e.message||String(e));}
+    });
+  }
+  function toggleLeaveTime(){
+    const hourly=$('leaveUnit').value==='時數';
+    $('leaveTimeBox').hidden=!hourly;
+    $('leaveEnd').disabled=hourly;
+    if(hourly)$('leaveEnd').value=$('leaveStart').value;
+  }
+  function leaveFingerprint(p){
+    return JSON.stringify([p.startDate,p.endDate,p.type,p.unit,
+      p.startTime,p.endTime,p.reason]);
+  }
+  function pendingLeaveRequest(fingerprint){
+    let item=null;
+    try{item=JSON.parse(sessionStorage.getItem(leavePendingKey)||'null');}
+    catch(_e){}
+    if(item && item.fingerprint===fingerprint && item.id)return item.id;
+    const id=requestId();
+    sessionStorage.setItem(leavePendingKey,JSON.stringify({fingerprint,id}));
+    return id;
+  }
+  async function submitTestLeave(){
+    await working($('leaveSend'),async()=>{
+      const box=$('leaveStatus');
+      const startDate=$('leaveStart').value,endDate=$('leaveEnd').value||startDate;
+      const unit=$('leaveUnit').value;
+      const payload={startDate,endDate,type:$('leaveType').value,unit,
+        startTime:unit==='時數'?$('leaveTimeStart').value:'',
+        endTime:unit==='時數'?$('leaveTimeEnd').value:'',
+        reason:$('leaveReason').value.trim()};
+      if(!startDate||!endDate||endDate<startDate){
+        box.textContent='請確認請假起訖日期';return;
+      }
+      if(unit==='時數'&&startDate!==endDate){
+        box.textContent='指定時段請假限單日';return;
+      }
+      payload.requestId=pendingLeaveRequest(leaveFingerprint(payload));
+      try{
+        box.textContent='正在提交測試請假單…';
+        const r=await callGAS('v2SubmitLeaveSecure',{idToken,...payload});
+        if(!r.ok)throw Error('後端未確認成功');
+        sessionStorage.removeItem(leavePendingKey);
+        box.textContent='✅ '+r.message+'\n期間：'+r.startDate+' 至 '+r.endDate+
+          '\n請假：'+r.days+'天\n申請單號：'+r.no;
+        $('reviewType').value='leave';
+        $('reviewNo').value=r.no;
+        await loadTestLeaveHistory();
+      }catch(e){
+        box.textContent='⚠️ 送出結果尚未確認：'+(e.message||String(e))+
+          '\n請先重新整理請假紀錄。使用相同表單重試，會沿用相同請求編號。';
+      }
+    });
+  }
+  async function loadTestLeaveHistory(){
+    await working($('leaveHistoryBtn'),async()=>{
+      const box=$('leaveHistory');
+      box.textContent='正在查詢我的測試請假紀錄…';
+      try{
+        const r=await callGAS('v2LeaveHistorySecure',{idToken});
+        if(!r.ok)throw Error('查詢未成功');
+        box.textContent=r.data.length?r.data.map(x=>
+          x.startDate+' 至 '+x.endDate+'｜'+x.leaveType+' '+x.quantity+
+          '｜'+x.status+'｜'+x.no).join('\n'):'尚無請假紀錄';
+      }catch(e){box.textContent='查詢失敗：'+(e.message||String(e));}
     });
   }
   async function testClock(type){

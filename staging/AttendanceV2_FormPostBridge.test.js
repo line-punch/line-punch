@@ -32,7 +32,7 @@ const nonce='a'.repeat(40);let count=0;
 function ok(name,fn){fn();count++;console.log('PASS '+name)}
 function parameters(extra={}){return {nonce,operation:'whoami',payload:JSON.stringify({idToken:'valid-id-token-with-a-synthetic-test-suffix-1234567'}),...extra}}
 ok('verified test user accepted',()=>{const r=ctx.v2BridgeRequest_(parameters());assert.equal(r.result.ok,true)});
-ok('invalid/empty token rejected',()=>assert.throws(()=>ctx.v2BridgeRequest_(parameters({payload:JSON.stringify({idToken:'bad'})})),/驗證失敗/));
+ok('invalid/empty token rejected',()=>assert.throws(()=>ctx.v2BridgeRequest_(parameters({payload:JSON.stringify({idToken:'invalid-token-long-enough-for-input-validation'})})),/驗證失敗/));
 ok('bad nonce rejected',()=>assert.throws(()=>ctx.v2BridgeRequest_(parameters({nonce:'short'})),/請求識別無效/));
 ok('method not allowlisted',()=>assert.throws(()=>ctx.v2BridgeRequest_(parameters({operation:'v2BindSecure'})),/無效的操作名稱|未開放此測試操作/));
 ok('reject invalid JSON',()=>assert.throws(()=>ctx.v2BridgeRequest_(parameters({payload:'{"oops":'})),/請求長度不正確|請求不是有效 JSON/));

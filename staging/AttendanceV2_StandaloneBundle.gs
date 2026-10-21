@@ -972,3 +972,11 @@ function testAttendanceV2Leave_() {
   return {ok:true,passed};
 }
 
+
+/**
+ * Apps Script editor entrypoint: click Run ONLY in the isolated V2 TEST project.
+ * Existing v2InstallSyntheticFixture_ validates exact sheet name/ID and emptiness.
+ */
+function v2InitializeTestSheet() {
+  return v2InstallSyntheticFixture_();
+}

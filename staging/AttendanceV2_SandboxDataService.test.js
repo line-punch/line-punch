@@ -225,6 +225,17 @@ test('same request retries without fresh GPS or extra write',()=>{
 test('same request ID with different punch type rejected',()=>{
  assert.throws(()=>ctx.v2dDispatch_(req('clock',{type:'下班',requestId:reqId})),/類型不符/);
 });
+test('Sheets Date-typed date cell still blocks same-day duplicate punch',()=>{
+ const row=sheets['打卡紀錄'].rows[1],saved=row[1];
+ row[1]=new Date();
+ const result=ctx.v2dDispatch_(req('clock',{
+  type:'上班',requestId:'date_typed_duplicate_456',
+  lat:25,lng:121,accuracy:12,capturedAt:Date.now()
+ })).result;
+ assert.equal(result.code,'ALREADY_CLOCKED');
+ assert.equal(sheets['打卡紀錄'].rows.length,2);
+ row[1]=saved;
+});
 test('second same-day same-type request does not double-write',()=>{
  const r=ctx.v2dDispatch_(req('clock',{
   type:'上班',requestId:'anotherclock_request_100',lat:25,lng:121,accuracy:20,capturedAt:Date.now()

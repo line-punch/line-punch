@@ -248,6 +248,64 @@ test('TESTSITE 50m radius rejects a roughly 67m GPS distance',()=>{
  assert.equal(r.allowDistance,50);
  assert.ok(r.distance>r.allowDistance);
 });
+
+test('50m geofence includes measured 49m but excludes 51m',()=>{
+ const radius=sheets['上班地點'].rows[1][4];
+ assert.equal(radius,50);
+ const inside=ctx.v2dSite_(ss,25+(49/111194.93),121);
+ const outside=ctx.v2dSite_(ss,25+(51/111194.93),121);
+ assert.equal(inside.allowDistance,50);
+ assert.equal(inside.distance,49);
+ assert.equal(outside.distance,51);
+ assert.ok(inside.distance<=50 && outside.distance>50);
+});
+test('invalid 50m site center and too-wide radius both fail closed',()=>{
+ const row=sheets['上班地點'].rows[1],prevCenter=row[3],prevRadius=row[4];
+ try {
+   row[3]='0,0';
+   assert.throws(()=>ctx.v2dSite_(ss,25,121),/測試場地尚未完成/);
+   row[3]=prevCenter;row[4]=301;
+   assert.throws(()=>ctx.v2dSite_(ss,25,121),/測試場地尚未完成/);
+   row[4]=9;
+   assert.throws(()=>ctx.v2dSite_(ss,25,121),/測試場地尚未完成/);
+ }finally{row[3]=prevCenter;row[4]=prevRadius}
+});
+test('duplicate TESTSITE location rows reject ambiguous geofence',()=>{
+ const rows=sheets['上班地點'].rows,prior=rows.length;
+ rows.push([...rows[1]]);
+ try{assert.throws(()=>ctx.v2dSite_(ss,25,121),/測試打卡地點設定不正確/)}
+ finally{rows.pop()}
+ assert.equal(rows.length,prior);
+});
+test('future-dated GPS capture is rejected before a first write',()=>{
+ const n=sheets['打卡紀錄'].rows.length;
+ assert.throws(()=>ctx.v2dDispatch_(req('clock',{
+   type:'上班',requestId:'future_capture_123456',
+   lat:25,lng:121,accuracy:10,capturedAt:Date.now()+30000
+ })),/GPS 定位已過期/);
+ assert.equal(sheets['打卡紀錄'].rows.length,n);
+});
+test('missing or invalid GPS accuracy blocks a new punch',()=>{
+ const rows=sheets['打卡紀錄'].rows,n=rows.length;
+ for(const accuracy of [0,-1,151]){
+   assert.throws(()=>ctx.v2dDispatch_(req('clock',{
+     type:'上班',requestId:'invalidaccuracy_123456',
+     lat:25,lng:121,accuracy,capturedAt:Date.now()
+   })),/定位精度不足/);
+ }
+ assert.equal(rows.length,n);
+});
+test('OUT_OF_RANGE yields definite no-write status and never leaks token',()=>{
+ const before=sheets['打卡紀錄'].rows.length;
+ const r=ctx.doPost({parameter:req('clock',{
+   type:'上班',requestId:'outside_radius_123456',
+   lat:25.01,lng:121.01,accuracy:10,capturedAt:Date.now()
+ })});
+ assert.ok(r.html.includes('"code":"OUT_OF_RANGE"'));
+ assert.ok(r.html.includes('"persisted":false'));
+ assert.equal(r.html.includes(fakeIdToken),false);
+ assert.equal(sheets['打卡紀錄'].rows.length,before);
+});
 test('poor accuracy rejected',()=>{
  assert.throws(()=>ctx.v2dDispatch_(req('clock',{
   type:'上班',requestId:reqId,lat:25,lng:121,accuracy:999,capturedAt:Date.now()
@@ -277,6 +335,18 @@ test('todayAttendance handles date cells as Date objects',()=>{
  row[1]=new Date();
  assert.equal(ctx.v2dDispatch_(req('todayAttendance')).result.total,1);
  row[1]=old;
+});
+
+test('confirmed request replay works even after worker moves outside GPS fence',()=>{
+ const before=sheets['打卡紀錄'].rows.length;
+ const r=ctx.v2dDispatch_(req('clock',{
+   type:'上班',requestId:reqId,lat:65,lng:1,accuracy:999,
+   capturedAt:Date.now()-86400000
+ })).result;
+ assert.equal(r.ok,true);
+ assert.equal(r.alreadyRecorded,true);
+ assert.equal(r.type,'上班');
+ assert.equal(sheets['打卡紀錄'].rows.length,before);
 });
 test('same request retries without fresh GPS or extra write',()=>{
  const r=ctx.v2dDispatch_(req('clock',{type:'上班',requestId:reqId})).result;

@@ -130,7 +130,7 @@ test('non-200 LINE verification rejected',()=>{
 });
 test('unknown operation rejected before LINE verification',()=>{
  const prior=verifyCalls;
- for(const operation of ['leave','review','delete','listEmployees','invite']){
+ for(const operation of ['leave','review','delete','listEmployees','invite','todayAllEmployees']){
    assert.throws(()=>ctx.v2dDispatch_(req(operation)),/未提供此測試功能/);
  }
  assert.equal(verifyCalls,prior);
@@ -183,6 +183,33 @@ test('bound whoami reports only TEST001',()=>{
  assert.equal(data.employee.name,'模擬員工甲');
  assert.equal(data.employee.lineUserId,undefined);
 });
+
+test('todayAttendance initially shows no stored punches for bound user',()=>{
+ const size=sheets['打卡紀錄'].rows.length;
+ const r=ctx.v2dDispatch_(req('todayAttendance')).result;
+ assert.equal(r.ok,true);assert.equal(r.total,0);
+ assert.equal(r.clockIn,null);assert.equal(r.clockOut,null);
+ assert.equal(size,sheets['打卡紀錄'].rows.length);
+});
+test('todayAttendance refuses unbound user',()=>{
+ const old=currentUid;currentUid='U'+'b'.repeat(32);
+ assert.throws(()=>ctx.v2dDispatch_(req('todayAttendance')),/尚未綁定/);
+ currentUid=old;
+});
+test('todayAttendance ignores other employee ID',()=>{
+ const rows=sheets['打卡紀錄'].rows;
+ rows.push([new Date(),utcDate().replace(/-/g,'/'),'09:00:00','OTHER','Other','上班',
+    'TESTSITE','測試場地','gps','', 'OTHER']);
+ assert.equal(ctx.v2dDispatch_(req('todayAttendance')).result.total,0);
+ rows.pop();
+});
+test('todayAttendance excludes earlier day',()=>{
+ const rows=sheets['打卡紀錄'].rows;
+ rows.push([new Date(),new Date(Date.now()-86400000),'09:00:00',
+    'TEST001','模擬員工甲','上班','TESTSITE','測試場地','gps','', 'OTHER']);
+ assert.equal(ctx.v2dDispatch_(req('todayAttendance')).result.total,0);
+ rows.pop();
+});
 const reqId='clock_request_test_123456';
 test('unconfigured 0,0 GPS site blocks punching',()=>{
  assert.throws(()=>ctx.v2dDispatch_(req('clock',{
@@ -230,6 +257,22 @@ test('valid GPS punch writes exactly one 11-column row',()=>{
  assert.equal(sheets['打卡紀錄'].rows[1].length,11);
  assert.equal(sheets['打卡紀錄'].rows[1][10],'LINE-V2:'+reqId);
 });
+
+test('todayAttendance remembers first clock without requestId',()=>{
+ const len=sheets['打卡紀錄'].rows.length;
+ const r=ctx.v2dDispatch_(req('todayAttendance')).result;
+ assert.equal(r.total,1);assert.equal(r.clockIn.time,'13:14:15');
+ assert.equal(r.clockIn.placeName,'測試場地');assert.equal(r.clockOut,null);
+ assert.equal(sheets['打卡紀錄'].rows.length,len);
+ for(const secret of [currentUid,reqId,'25,121',fakeIdToken])
+   assert.equal(JSON.stringify(r).includes(secret),false);
+});
+test('todayAttendance handles date cells as Date objects',()=>{
+ const row=sheets['打卡紀錄'].rows[1],old=row[1];
+ row[1]=new Date();
+ assert.equal(ctx.v2dDispatch_(req('todayAttendance')).result.total,1);
+ row[1]=old;
+});
 test('same request retries without fresh GPS or extra write',()=>{
  const r=ctx.v2dDispatch_(req('clock',{type:'上班',requestId:reqId})).result;
  assert.equal(r.alreadyRecorded,true);
@@ -255,6 +298,29 @@ test('second same-day same-type request does not double-write',()=>{
  })).result;
  assert.equal(r.ok,false);assert.equal(r.code,'ALREADY_CLOCKED');
  assert.equal(sheets['打卡紀錄'].rows.length,2);
+});
+
+test('todayAttendance reads exactly one clock in and one clock out',()=>{
+ const rows=sheets['打卡紀錄'].rows,n=rows.length;
+ rows.push([new Date(),rows[1][1],'18:46:00','TEST001','模擬員工甲',
+   '下班','TESTSITE','測試場地','secret-gps','', 'LINE-V2:second']);
+ const r=ctx.v2dDispatch_(req('todayAttendance')).result;
+ assert.equal(r.total,2);assert.equal(r.clockIn.time,'13:14:15');
+ assert.equal(r.clockOut.time,'18:46:00');
+ assert.equal(JSON.stringify(r).includes('secret-gps'),false);
+ assert.equal(rows.length,n+1);rows.pop();
+});
+test('todayAttendance raises alarm rather than hiding duplicate rows',()=>{
+ const rows=sheets['打卡紀錄'].rows;
+ rows.push([...rows[1]]);
+ assert.throws(()=>ctx.v2dDispatch_(req('todayAttendance')),/紀錄重複/);
+ rows.pop();
+});
+test('todayAttendance rejects malformed recorded time',()=>{
+ const row=sheets['打卡紀錄'].rows[1],old=row[2];
+ row[2]='bad-time';
+ assert.throws(()=>ctx.v2dDispatch_(req('todayAttendance')),/時間格式異常/);
+ row[2]=old;
 });
 test('clockStatus finds committed request after response loss',()=>{
  const r=ctx.v2dDispatch_(req('clockStatus',{

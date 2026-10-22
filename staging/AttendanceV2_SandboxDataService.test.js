@@ -67,9 +67,14 @@ const ctx={
   computeDigest:(alg,text)=>fakeDigest(text),
   DigestAlgorithm:{SHA_256:'SHA_256'},Charset:{UTF_8:'UTF_8'},
   formatDate:(date,zone,pattern)=>{
-    if(pattern==='yyyy/MM/dd')return utcDate().replace(/-/g,'/');
+    // Simulate Apps Script's Asia/Taipei calendar-day formatting for any Date.
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{
+      timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'
+    }).formatToParts(date).map(p=>[p.type,p.value]));
+    const key=parts.year+'-'+parts.month+'-'+parts.day;
+    if(pattern==='yyyy/MM/dd')return key.replace(/-/g,'/');
     if(pattern==='HH:mm:ss')return '13:14:15';
-    if(pattern==='yyyy-MM-dd')return utcDate();
+    if(pattern==='yyyy-MM-dd')return key;
     throw Error('Unsupported test date format '+pattern);
   }
  },

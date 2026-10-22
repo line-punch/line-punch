@@ -258,13 +258,56 @@ function v2dClock_(ss,lineUserId,payload,asStatus) {
     return v2dClockSummary_(row,false);
   }finally{lock.releaseLock()}
 }
+/**
+ * Read-only, LINE-authenticated TODAY attendance result.
+ * Works after browser restart even if the original requestId is lost.
+ * Uses Taiwan server calendar day, never a user-supplied date or employee ID.
+ * Returns no GPS, LINE ID or request identifiers.
+ *
+ * Absence of a row is not proof that an in-flight write failed.
+ */
+function v2dTodayAttendance_(ss,lineUserId) {
+  const emp=v2dEmployee_(ss,lineUserId);
+  if(!emp.bound)throw Error('LINE 尚未綁定模擬員工');
+  const today=Utilities.formatDate(new Date(),'Asia/Taipei','yyyy/MM/dd');
+  const sh=ss.getSheetByName('打卡紀錄');
+  const values=sh.getDataRange().getValues();
+  const found={'上班':null,'下班':null};
+  const counts={'上班':0,'下班':0};
+  for(let i=1;i<values.length;i++){
+    const row=values[i];
+    if(String(row[3]||'').trim()!==emp.employeeId)continue;
+    // Sheets sometimes auto-converts yyyy/MM/dd to an actual Date cell.
+    const day=row[1] instanceof Date
+      ?Utilities.formatDate(row[1],'Asia/Taipei','yyyy/MM/dd')
+      :String(row[1]||'').trim().replace(/-/g,'/');
+    if(day!==today)continue;
+    const type=String(row[5]||'').trim();
+    if(type!=='上班'&&type!=='下班')continue;
+    counts[type]++;
+    if(counts[type]>1)
+      throw Error('本日測試打卡紀錄重複，請管理員核對');
+    const time=row[2] instanceof Date
+      ?Utilities.formatDate(row[2],'Asia/Taipei','HH:mm:ss')
+      :String(row[2]||'').trim();
+    if(!/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(time))
+      throw Error('本日測試打卡時間格式異常');
+    found[type]={
+      time:time,
+      placeName:String(row[7]||'').trim().slice(0,80)
+    };
+  }
+  return {ok:true,date:today,clockIn:found['上班'],clockOut:found['下班'],
+    total:counts['上班']+counts['下班'],
+    message:'僅顯示已查到的今日打卡紀錄；未顯示不代表正在處理的打卡失敗'};
+}
 function v2dDispatch_(params) {
   const ss=v2dTestSheet_();
   if(!params || typeof params!=='object')throw Error('無效請求');
   const nonce=String(params.nonce||'');
   if(!/^[0-9a-f]{40}$/.test(nonce))throw Error('無效請求識別碼');
   const operation=String(params.operation||'');
-  if(!['whoami','bind','clock','clockStatus'].includes(operation))
+  if(!['whoami','bind','clock','clockStatus','todayAttendance'].includes(operation))
     throw Error('未提供此測試功能');
   const raw=String(params.payload||'');
   if(raw.length<30||raw.length>12000)throw Error('請求內容長度不正確');
@@ -275,6 +318,7 @@ function v2dDispatch_(params) {
   // Authentication always occurs before dispatch.
   const lineUserId=v2dLineClaims_(data.idToken);
   if(operation==='whoami')return {nonce,result:v2dWhoami_(ss,lineUserId)};
+  if(operation==='todayAttendance')return {nonce,result:v2dTodayAttendance_(ss,lineUserId)};
   if(operation==='bind')return {nonce,result:v2dBind_(ss,lineUserId,data)};
   if(operation==='clock')return {nonce,result:v2dClock_(ss,lineUserId,data,false)};
   return {nonce,result:v2dClock_(ss,lineUserId,data,true)};

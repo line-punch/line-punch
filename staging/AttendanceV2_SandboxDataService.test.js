@@ -203,6 +203,19 @@ test('stale GPS cannot start a new punch',()=>{
  })),/GPS 定位已過期/);
  assert.equal(sheets['打卡紀錄'].rows.length,1);
 });
+test('TESTSITE 50m radius accepts a roughly 33m GPS distance',()=>{
+ sheets['上班地點'].rows[1][4]=50;
+ const result=ctx.v2dSite_(ss,25.0003,121);
+ assert.equal(result.allowDistance,50);
+ assert.ok(result.distance>=30 && result.distance<=36);
+ assert.ok(result.distance<=result.allowDistance);
+});
+test('TESTSITE 50m radius rejects a roughly 67m GPS distance',()=>{
+ const r=ctx.v2dSite_(ss,25.0006,121);
+ assert.ok(r.distance>=60);
+ assert.equal(r.allowDistance,50);
+ assert.ok(r.distance>r.allowDistance);
+});
 test('poor accuracy rejected',()=>{
  assert.throws(()=>ctx.v2dDispatch_(req('clock',{
   type:'上班',requestId:reqId,lat:25,lng:121,accuracy:999,capturedAt:Date.now()

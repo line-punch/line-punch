@@ -367,6 +367,25 @@ test('Sheets Date-typed date cell still blocks same-day duplicate punch',()=>{
  assert.equal(sheets['打卡紀錄'].rows.length,2);
  row[1]=saved;
 });
+
+test('after leaving test geofence, repeated same-day type reports already clocked',()=>{
+ const rows=sheets['打卡紀錄'].rows,before=rows.length;
+ const r=ctx.v2dDispatch_(req('clock',{
+   type:'上班',requestId:'already_clocked_offsite_123',
+   lat:25.5,lng:121.5,accuracy:20,capturedAt:Date.now()
+ })).result;
+ assert.equal(r.ok,false);assert.equal(r.code,'ALREADY_CLOCKED');
+ assert.equal(r.message,'今天已有同類型測試打卡，請查詢紀錄');
+ assert.equal(rows.length,before);
+});
+test('after successful clock, missing GPS cannot hide already clocked status',()=>{
+ const rows=sheets['打卡紀錄'].rows,before=rows.length;
+ const r=ctx.v2dDispatch_(req('clock',{
+   type:'上班',requestId:'already_clocked_no_gps_123'
+ })).result;
+ assert.equal(r.code,'ALREADY_CLOCKED');
+ assert.equal(rows.length,before);
+});
 test('second same-day same-type request does not double-write',()=>{
  const r=ctx.v2dDispatch_(req('clock',{
   type:'上班',requestId:'anotherclock_request_100',lat:25,lng:121,accuracy:20,capturedAt:Date.now()

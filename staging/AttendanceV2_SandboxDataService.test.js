@@ -273,7 +273,7 @@ test('invalid 50m site center and too-wide radius both fail closed',()=>{
 test('duplicate TESTSITE location rows reject ambiguous geofence',()=>{
  const rows=sheets['上班地點'].rows,prior=rows.length;
  rows.push([...rows[1]]);
- try{assert.throws(()=>ctx.v2dSite_(ss,25,121),/測試打卡地點設定不正確/)}
+ try{assert.throws(()=>ctx.v2dSite_(ss,25,121),/模擬打卡地點設定不正確/)}
  finally{rows.pop()}
  assert.equal(rows.length,prior);
 });

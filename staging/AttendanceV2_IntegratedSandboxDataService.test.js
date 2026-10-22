@@ -840,4 +840,72 @@ test('review switch can be turned off again after a test run',()=>{
  assert.equal(existingLeave[8],'駁回');
 });
 
+
+test('original C and D are text-notice recipients, E alone receives approval card',()=>{
+ const row=sheets['審核通知名單'].rows[1];
+ row[2]='U'+'c'.repeat(32);
+ row[3]='U'+'d'.repeat(32);
+ row[4]=currentUid;
+ const plan=ctx.v2nExistingRecipients_(ss,'TEST001');
+ assert.equal(plan.notificationTextRecipients.length,2);
+ assert.equal(plan.notificationTextRecipients[0],row[2]);
+ assert.equal(plan.notificationTextRecipients[1],row[3]);
+ assert.equal(plan.approvalFlexRecipient,row[4]);
+ assert.equal(plan.hasReviewer,true);
+});
+test('same ID in notification C and D must not receive duplicate text notification',()=>{
+ const row=sheets['審核通知名單'].rows[1],old=row[3];
+ row[3]=row[2];
+ try{
+   const plan=ctx.v2nExistingRecipients_(ss,'TEST001');
+   assert.equal(plan.notificationTextRecipients.length,1);
+ }finally{row[3]=old}
+});
+test('notification supervisors C and D cannot approve when only E authorizes',()=>{
+ const row=sheets['審核通知名單'].rows[1];
+ assert.equal(ctx.v2nCanApprove_(ss,'TEST001',row[2]),false);
+ assert.equal(ctx.v2nCanApprove_(ss,'TEST001',row[3]),false);
+ assert.equal(ctx.v2nCanApprove_(ss,'TEST001',row[4]),true);
+ for(const uid of [row[2],row[3]]){
+   const previous=currentUid;currentUid=uid;
+   try{
+     assert.throws(()=>ctx.v2dDispatch_(req('reviewDetails',{
+        type:'miss',no:existingMiss[0]
+     })),/無審核權限/);
+   }finally{currentUid=previous}
+ }
+});
+test('if C equals E, that same identity has E reviewer power without granting D',()=>{
+ const row=sheets['審核通知名單'].rows[1],oldC=row[2];
+ row[2]=currentUid;
+ try{
+   const plan=ctx.v2nExistingRecipients_(ss,'TEST001');
+   assert.equal(plan.notificationTextRecipients.includes(currentUid),true);
+   assert.equal(ctx.v2nCanApprove_(ss,'TEST001',currentUid),true);
+   assert.equal(ctx.v2nCanApprove_(ss,'TEST001',row[3]),false);
+ }finally{row[2]=oldC}
+});
+test('if E approval reviewer is blank, none can approve though C/D get text',()=>{
+ const row=sheets['審核通知名單'].rows[1],oldE=row[4];
+ row[4]='';
+ try{
+   const plan=ctx.v2nExistingRecipients_(ss,'TEST001');
+   assert.equal(plan.notificationTextRecipients.length,2);
+   assert.equal(plan.hasReviewer,false);
+   for(const uid of [row[2],row[3],oldE]){
+     assert.equal(ctx.v2nCanApprove_(ss,'TEST001',uid),false);
+   }
+ }finally{row[4]=oldE}
+});
+test('duplicate review configuration for same employee stops all routing/approval',()=>{
+ const sh=sheets['審核通知名單'],n=sh.rows.length;
+ sh.rows.push([...sh.rows[1]]);
+ try{
+   assert.throws(()=>ctx.v2nExistingRecipients_(ss,'TEST001'),/重複設定/);
+   assert.throws(()=>ctx.v2dDispatch_(req('reviewDetails',{
+      type:'miss',no:existingMiss[0]
+   })),/重複設定/);
+ }finally{sh.rows.length=n}
+});
+
 console.log('TOTAL '+total+' passed');

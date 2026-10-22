@@ -534,7 +534,7 @@ test('old monthly query cannot choose another employee with supplied empid',()=>
 });
 test('old monthly query rejects future or invalid month',()=>{
  for(const month of ['000000','202613','bad','203001']){
-   assert.throws(()=>ctx.v2dDispatch_(req('monthQuery',{month})),/月份/);
+   assert.throws(()=>ctx.v2dDispatch_(req('monthQuery',{month})),/(月份|只能查詢當月)/);
  }
 });
 test('old monthly query rejects unbound LINE identity',()=>{

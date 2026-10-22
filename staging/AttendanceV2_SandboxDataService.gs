@@ -278,6 +278,34 @@ function v2dResponse_(data) {
   return HtmlService.createHtmlOutput(html)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
+function v2dPublicFailure_(error) {
+  // Only these deliberately known, pre-write validation failures may be
+  // described as definitive. Any unexpected error remains UNKNOWN so the
+  // operator can check the original request status, not blindly retry.
+  const msg=String(error && error.message || '');
+  const reasons={
+    '邀請碼格式不正確':'BIND_FORMAT',
+    '邀請碼不存在或已過期':'BIND_EXPIRED',
+    '邀請碼不正確':'BIND_INVALID',
+    '模擬員工已綁定其他測試帳號':'BIND_TAKEN',
+    '模擬員工帳號不在職':'INACTIVE',
+    'LINE 尚未綁定模擬員工':'NOT_BOUND',
+    '尚未取得 GPS 定位':'GPS_MISSING',
+    'GPS 座標無效':'GPS_INVALID',
+    '定位精度不足，請重新定位':'GPS_ACCURACY',
+    '測試場地尚未完成 GPS 設定':'SITE_NOT_READY',
+    '超出測試打卡允許範圍':'OUT_OF_RANGE',
+    '打卡類型錯誤':'TYPE_INVALID',
+    '打卡請求編號無效':'REQUEST_ID_INVALID',
+    '打卡請求編號類型不符':'REQUEST_ID_CONFLICT'
+  };
+  if(Object.prototype.hasOwnProperty.call(reasons,msg))
+    return {code:reasons[msg],error:msg,persisted:false};
+  if(/LINE 登入/.test(msg)||/LINE 驗證/.test(msg))
+    return {code:'AUTH',error:'LINE 登入驗證失敗，請重新開啟測試入口',
+      persisted:false};
+  return {code:'UNKNOWN',error:'測試結果尚未確認，請查詢原請求或聯絡管理員'};
+}
 function doPost(e) {
   const params=(e&&e.parameter)||{},nonce=String(params.nonce||'');
   let reply;
@@ -285,9 +313,9 @@ function doPost(e) {
     const data=v2dDispatch_(params);
     reply={bridge:'YC_V2_STAGING_FORM_V1',nonce:data.nonce,ok:true,
       result:data.result};
-  }catch(_){
+  }catch(error){
     reply={bridge:'YC_V2_STAGING_FORM_V1',nonce,ok:false,
-      error:'測試服務尚未完成此操作，請查詢原請求或聯絡管理員'};
+      ...v2dPublicFailure_(error)};
   }
   return v2dResponse_(reply);
 }

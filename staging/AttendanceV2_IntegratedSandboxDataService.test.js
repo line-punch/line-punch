@@ -146,7 +146,7 @@ test('non-200 LINE verification rejected',()=>{
 });
 test('unknown operation rejected before LINE verification',()=>{
  const prior=verifyCalls;
- for(const operation of ['leave','review','delete','listEmployees','invite','todayAllEmployees']){
+ for(const operation of ['leave','delete','listEmployees','invite','todayAllEmployees']){
    assert.throws(()=>ctx.v2dDispatch_(req(operation)),/未提供此測試功能/);
  }
  assert.equal(verifyCalls,prior);

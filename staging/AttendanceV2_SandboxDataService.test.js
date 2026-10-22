@@ -186,24 +186,31 @@ test('bound whoami reports only TEST001',()=>{
 const reqId='clock_request_test_123456';
 test('unconfigured 0,0 GPS site blocks punching',()=>{
  assert.throws(()=>ctx.v2dDispatch_(req('clock',{
-  type:'上班',requestId:reqId,lat:25,lng:121,accuracy:10
+  type:'上班',requestId:reqId,lat:25,lng:121,accuracy:10,capturedAt:Date.now()
  })),/尚未完成 GPS 設定/);
  assert.equal(sheets['打卡紀錄'].rows.length,1);
 });
 sheets['上班地點'].rows[1][3]='25,121';
 test('out-of-radius GPS blocked',()=>{
  assert.throws(()=>ctx.v2dDispatch_(req('clock',{
-  type:'上班',requestId:reqId,lat:25.01,lng:121.01,accuracy:15
+  type:'上班',requestId:reqId,lat:25.01,lng:121.01,accuracy:15,capturedAt:Date.now()
  })),/超出測試打卡允許範圍/);
+});
+test('stale GPS cannot start a new punch',()=>{
+ assert.throws(()=>ctx.v2dDispatch_(req('clock',{
+  type:'上班',requestId:reqId,lat:25,lng:121,accuracy:10,
+  capturedAt:Date.now()-180000
+ })),/GPS 定位已過期/);
+ assert.equal(sheets['打卡紀錄'].rows.length,1);
 });
 test('poor accuracy rejected',()=>{
  assert.throws(()=>ctx.v2dDispatch_(req('clock',{
-  type:'上班',requestId:reqId,lat:25,lng:121,accuracy:999
+  type:'上班',requestId:reqId,lat:25,lng:121,accuracy:999,capturedAt:Date.now()
  })),/定位精度不足/);
 });
 test('valid GPS punch writes exactly one 11-column row',()=>{
  const r=ctx.v2dDispatch_(req('clock',{
-  type:'上班',requestId:reqId,lat:25,lng:121,accuracy:10
+  type:'上班',requestId:reqId,lat:25,lng:121,accuracy:10,capturedAt:Date.now()
  })).result;
  assert.equal(r.ok,true);assert.equal(r.found,true);assert.equal(r.alreadyRecorded,false);
  assert.equal(sheets['打卡紀錄'].rows.length,2);
@@ -220,7 +227,7 @@ test('same request ID with different punch type rejected',()=>{
 });
 test('second same-day same-type request does not double-write',()=>{
  const r=ctx.v2dDispatch_(req('clock',{
-  type:'上班',requestId:'anotherclock_request_100',lat:25,lng:121,accuracy:20
+  type:'上班',requestId:'anotherclock_request_100',lat:25,lng:121,accuracy:20,capturedAt:Date.now()
  })).result;
  assert.equal(r.ok,false);assert.equal(r.code,'ALREADY_CLOCKED');
  assert.equal(sheets['打卡紀錄'].rows.length,2);
@@ -248,7 +255,7 @@ test('server lock failure blocks writes',()=>{
  allowLock=false;
  assert.throws(()=>ctx.v2dDispatch_(req('clock',{
   type:'下班',requestId:'clock_busy_req_10000',
-  lat:25,lng:121,accuracy:10
+  lat:25,lng:121,accuracy:10,capturedAt:Date.now()
  })),/忙碌/);
  allowLock=true;
  assert.equal(sheets['打卡紀錄'].rows.length,n);
@@ -260,6 +267,14 @@ test('doPost replies only to fixed Github origin without token or LINE user ID',
  assert.equal(r.html.includes(fakeIdToken),false);
  assert.equal(r.html.includes(currentUid),false);
  assert.ok(r.html.includes('YC_V2_STAGING_FORM_V1'));
+});
+test('known GPS rejection has definite no-write status',()=>{
+ const p=ctx.doPost({parameter:req('clock',{
+  type:'下班',requestId:'stale_new_request_200',lat:25,lng:121,
+  accuracy:10,capturedAt:Date.now()-180000
+ })});
+ assert.ok(p.html.includes('"code":"GPS_STALE"'));
+ assert.ok(p.html.includes('"persisted":false'));
 });
 test('doPost error does not leak token or details',()=>{
  const r=ctx.doPost({parameter:req('leave',{reason:'do-not-echo-this'})});

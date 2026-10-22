@@ -72,6 +72,8 @@ const ctx={
       timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'
     }).formatToParts(date).map(p=>[p.type,p.value]));
     const key=parts.year+'-'+parts.month+'-'+parts.day;
+    if(pattern==='yyyyMM')return key.replace(/-/g,'').slice(0,6);
+    if(pattern==='yyyy/MM/dd HH:mm')return key.replace(/-/g,'/')+' 13:14';
     if(pattern==='yyyy/MM/dd')return key.replace(/-/g,'/');
     if(pattern==='HH:mm:ss')return '13:14:15';
     if(pattern==='yyyy-MM-dd')return key;
@@ -504,4 +506,108 @@ test('every data-service access uses only script-property isolated Sheet ID',()=
  assert.equal(opens.every(id=>id===ss.getId()||id==='WRONG_SHEET_ID_1234567890'),true);
  assert.equal(source.includes('SpreadsheetApp.getActiveSpreadsheet'),false);
 });
+
+// ---- Existing business-page read contracts reused under verified LINE identity ----
+sheets['補打卡申請']=sheet('補打卡申請',[
+ ['申請單號','員工ID','姓名','日期','公司','班別','時間','原因','狀態','申請時間','審核人','審核時間','核定打卡時間']
+]);
+sheets['請假申請']=sheet('請假申請',[
+ ['申請單號','員工ID','姓名','假別','開始日期','結束日期','天數/時數','原因','狀態','申請時間','審核人','審核時間']
+]);
+const currentMonth=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit'})
+ .format(new Date()).replace(/[^0-9]/g,'').slice(0,6);
+const dateToday=ctx.v2dTodayAttendance_(ss,currentUid).date;
+test('old monthly query works for TEST001 with same response shape',()=>{
+ const r=ctx.v2dDispatch_(req('monthQuery',{month:currentMonth})).result;
+ assert.equal(r.ok,true);
+ assert.equal(r.month,currentMonth);
+ assert.ok(r.total>=1);
+ assert.equal(r.total,r.data.length);
+ assert.equal(r.data[0].type,'上班');
+ assert.equal(JSON.stringify(r).includes('25,121'),false);
+});
+test('old monthly query cannot choose another employee with supplied empid',()=>{
+ const r=ctx.v2dDispatch_(req('monthQuery',{month:currentMonth,
+   empid:'OTHER'})).result;
+ assert.ok(r.total>=1);
+ assert.equal(r.data.every(x=>x.type==='上班'),true);
+});
+test('old monthly query rejects future or invalid month',()=>{
+ for(const month of ['000000','202613','bad','203001']){
+   assert.throws(()=>ctx.v2dDispatch_(req('monthQuery',{month})),/月份/);
+ }
+});
+test('old monthly query rejects unbound LINE identity',()=>{
+ const old=currentUid;currentUid='U'+'b'.repeat(32);
+ assert.throws(()=>ctx.v2dDispatch_(req('monthQuery',{month:currentMonth})),/尚未綁定/);
+ currentUid=old;
+});
+test('old monthly query ignores rows belonging to other employee',()=>{
+ const rows=sheets['打卡紀錄'].rows,prior=rows.length;
+ rows.push([new Date(),dateToday,'18:00:00','OTHER','隔離乙','下班',
+   'TESTSITE','測試場地','secret-gps','', 'LINE-V2:other']);
+ try{
+  const r=ctx.v2dDispatch_(req('monthQuery',{month:currentMonth})).result;
+  assert.equal(r.data.every(x=>x.type==='上班'),true);
+ }finally{rows.length=prior}
+});
+test('missed punch history uses existing 13-column schema and returns ten latest',()=>{
+ const sh=sheets['補打卡申請'];
+ for(let i=1;i<=12;i++)sh.appendRow([
+  'MISS'+i,'TEST001','模擬員工甲',dateToday,'TEST_CO',
+  '上班','08:30','原因'+i,'待審核','now','','',''
+ ]);
+ const r=ctx.v2dDispatch_(req('missHistory')).result;
+ assert.equal(r.ok,true);assert.equal(r.data.length,10);
+ assert.equal(r.data[0].reason,'原因12');
+ assert.equal(r.data[0].status,'待審核');
+ assert.equal(r.data[0].time,'08:30');
+});
+test('miss history excludes other employee and does not leak LINE IDs',()=>{
+ const sh=sheets['補打卡申請'],n=sh.rows.length;
+ sh.appendRow(['MISSOTH','OTHER','他人',dateToday,'OTHER',
+ '下班','20:00','private reason','待審核','','','','']);
+ const r=ctx.v2dDispatch_(req('missHistory')).result;
+ assert.equal(r.data.length,10);
+ assert.equal(JSON.stringify(r).includes('private reason'),false);
+ sh.rows.length=n;
+});
+test('leave history preserves old leave status and reason field positions',()=>{
+ const sh=sheets['請假申請'];
+ sh.appendRow(['LEAVE1','TEST001','模擬員工甲','婚假',dateToday,dateToday,
+   '1天','個人原因','待審核','now','','']);
+ const r=ctx.v2dDispatch_(req('leaveHistory')).result;
+ assert.equal(r.data.length,1);
+ assert.equal(r.data[0].type,'婚假');
+ assert.equal(r.data[0].range,'1天');
+ assert.equal(r.data[0].status,'待審核');
+});
+test('leave history ignores other employee submissions',()=>{
+ const sh=sheets['請假申請'],before=sh.rows.length;
+ sh.appendRow(['LEAVE2','OTHER','其他員工','病假',dateToday,dateToday,
+   '1天','private','待審核','now','','']);
+ const r=ctx.v2dDispatch_(req('leaveHistory')).result;
+ assert.equal(r.data.length,1);
+ assert.equal(JSON.stringify(r).includes('private'),false);
+ sh.rows.length=before;
+});
+test('legacy read adapters must not be remotely writable via GET or unknown ops',()=>{
+ const p=ctx.doGet();
+ assert.equal(p.mime,'TEXT');
+ const bad=ctx.doPost({parameter:req('submitMiss',{reason:'fake'})});
+ assert.ok(bad.html.includes('"ok":false'));
+ assert.equal(JSON.stringify(bad).includes(fakeIdToken),false);
+});
+test('history query and monthly query never write to the isolated test sheet',()=>{
+ const count=sheets['打卡紀錄'].rows.length;
+ const misses=sheets['補打卡申請'].rows.length;
+ const leaves=sheets['請假申請'].rows.length;
+ ctx.v2dDispatch_(req('monthQuery',{month:currentMonth}));
+ ctx.v2dDispatch_(req('missHistory'));
+ ctx.v2dDispatch_(req('leaveHistory'));
+ assert.equal(count,sheets['打卡紀錄'].rows.length);
+ assert.equal(misses,sheets['補打卡申請'].rows.length);
+ assert.equal(leaves,sheets['請假申請'].rows.length);
+});
+
 console.log('TOTAL '+total+' passed');

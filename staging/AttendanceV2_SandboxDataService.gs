@@ -239,8 +239,13 @@ function v2dClock_(ss,lineUserId,payload,asStatus) {
     const date=Utilities.formatDate(now,'Asia/Taipei','yyyy/MM/dd');
     const time=Utilities.formatDate(now,'Asia/Taipei','HH:mm:ss');
     for(const old of rows.slice(1)){
+      // Google Sheets may auto-convert a written yyyy/MM/dd cell into a Date.
+      // Compare the Taipei calendar day in both Date and textual cell cases.
+      const oldDay=old[1] instanceof Date
+        ? Utilities.formatDate(old[1],'Asia/Taipei','yyyy/MM/dd')
+        : String(old[1]||'').replace(/-/g,'/');
       if(String(old[3])===V2D_EMPLOYEE_ID&&
-        String(old[1]).replace(/-/g,'/')===date&&String(old[5])===type)
+        oldDay===date&&String(old[5])===type)
         return {ok:false,code:'ALREADY_CLOCKED',
           message:'今天已有同類型測試打卡，請查詢紀錄'};
     }

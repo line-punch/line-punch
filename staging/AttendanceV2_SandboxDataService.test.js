@@ -111,7 +111,7 @@ test('unbound whoami returns only bound=false',()=>{
 });
 test('invalid identity rejected before business dispatch',()=>{
  const prior=verifyCalls;
- assert.throws(()=>ctx.v2dDispatch_(req('whoami',{idToken:'plain'})),/資訊無效/);
+ assert.throws(()=>ctx.v2dDispatch_(req('whoami',{idToken:'plain_token_with_bad_JWT_format_long'})),/資訊無效/);
  assert.equal(verifyCalls,prior);
 });
 test('forged LINE channel claim rejected',()=>{

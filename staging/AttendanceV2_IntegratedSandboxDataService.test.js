@@ -74,6 +74,7 @@ const ctx={
     const key=parts.year+'-'+parts.month+'-'+parts.day;
     if(pattern==='yyyyMM')return key.replace(/-/g,'').slice(0,6);
     if(pattern==='yyyy/MM/dd HH:mm')return key.replace(/-/g,'/')+' 13:14';
+    if(pattern==='yyyy/MM/dd HH:mm:ss')return key.replace(/-/g,'/')+' 13:14:15';
     if(pattern==='yyyy/MM/dd')return key.replace(/-/g,'/');
     if(pattern==='HH:mm:ss')return '13:14:15';
     if(pattern==='yyyy-MM-dd')return key;
@@ -608,6 +609,125 @@ test('history query and monthly query never write to the isolated test sheet',()
  assert.equal(count,sheets['打卡紀錄'].rows.length);
  assert.equal(misses,sheets['補打卡申請'].rows.length);
  assert.equal(leaves,sheets['請假申請'].rows.length);
+});
+
+
+// ---- Original missed/leave writes preserved, gated and sandbox-only ----
+test('existing production form writes are DISABLED until explicit sandbox setting',()=>{
+ const old=sheets['補打卡申請'].rows.length;
+ assert.throws(()=>ctx.v2dDispatch_(req('submitMiss',{
+   requestId:'miss-test-off-1234',date:dateToday,type:'上班',
+   time:'08:30',reason:'忘記打卡'
+ })),/尚未開放/);
+ assert.equal(sheets['補打卡申請'].rows.length,old);
+});
+properties.set('ATTENDANCE_V2_APPLICATION_TEST_WRITES','enabled');
+test('synthetic missed punch writes original 13 columns, with no notification',()=>{
+ const sh=sheets['補打卡申請'],before=sh.rows.length;
+ const r=ctx.v2dDispatch_(req('submitMiss',{
+   requestId:'miss-test-12345678',date:dateToday,
+   type:'上班',time:'08:30',reason:'忘記打卡',empid:'OTHER',name:'偽造'
+ })).result;
+ assert.equal(r.ok,true);
+ assert.equal(r.status,'待審核');
+ assert.equal(r.alreadyRecorded,false);
+ assert.equal(sh.rows.length,before+1);
+ const row=sh.rows.at(-1);
+ assert.equal(row.length,13);
+ assert.equal(row[1],'TEST001');
+ assert.equal(row[2],'模擬員工甲');
+ assert.equal(row[4],'TEST_CO');
+ assert.equal(row[8],'待審核');
+ assert.equal(row[10],'');assert.equal(row[11],'');assert.equal(row[12],'');
+});
+test('same request ID replays missed punch without extra submission',()=>{
+ const sh=sheets['補打卡申請'],prior=sh.rows.length;
+ const r=ctx.v2dDispatch_(req('submitMiss',{
+   requestId:'miss-test-12345678',date:dateToday,
+   type:'上班',time:'08:30',reason:'忘記打卡'
+ })).result;
+ assert.equal(r.alreadyRecorded,true);
+ assert.equal(sh.rows.length,prior);
+});
+test('changed date or type with reused missed-punch request ID is rejected',()=>{
+ assert.throws(()=>ctx.v2dDispatch_(req('submitMiss',{
+  requestId:'miss-test-12345678',date:dateToday,
+  type:'下班',time:'08:30',reason:'忘記打卡'
+ })),/先前內容不同/);
+});
+test('missed punch blocks invalid time and blank reason',()=>{
+ for(const payload of [
+   {type:'上班',time:'99:99',reason:'forget'},
+   {type:'上班',time:'08:30',reason:''}
+ ]){
+  const prior=sheets['補打卡申請'].rows.length;
+  assert.throws(()=>ctx.v2dDispatch_(req('submitMiss',{
+    requestId:'miss-invalid-123456',date:dateToday,...payload
+  })),/(時間格式|有效的補打卡原因)/);
+  assert.equal(sheets['補打卡申請'].rows.length,prior);
+ }
+});
+test('leave write preserves 12 columns and six original leave types',()=>{
+ const sh=sheets['請假申請'],before=sh.rows.length;
+ const r=ctx.v2dDispatch_(req('submitLeave',{
+   requestId:'leave-test-12345678',leaveDate:dateToday,
+   type:'婚假',unit:'全天',reason:'家中有事',empid:'OTHER'
+ })).result;
+ assert.equal(r.ok,true);assert.equal(r.status,'待審核');
+ assert.equal(sh.rows.length,before+1);
+ const row=sh.rows.at(-1);
+ assert.equal(row.length,12);
+ assert.equal(row[1],'TEST001');
+ assert.equal(row[3],'婚假');
+ assert.equal(row[6],'1天');
+ assert.equal(row[8],'待審核');
+});
+test('leave replay does not generate a second row',()=>{
+ const sh=sheets['請假申請'],before=sh.rows.length;
+ const r=ctx.v2dDispatch_(req('submitLeave',{
+   requestId:'leave-test-12345678',leaveDate:dateToday,
+   type:'婚假',unit:'全天',reason:'家中有事'
+ })).result;
+ assert.equal(r.alreadyRecorded,true);
+ assert.equal(sh.rows.length,before);
+});
+test('hourly sick leave requires valid start/end and keeps original text',()=>{
+ const r=ctx.v2dDispatch_(req('submitLeave',{
+   requestId:'leave-hours-1234567',leaveDate:dateToday,
+   type:'病假',unit:'時數',startTime:'09:00',endTime:'10:30'
+ })).result;
+ assert.equal(r.ok,true);
+ assert.equal(sheets['請假申請'].rows.at(-1)[6],'09:00-10:30');
+ assert.throws(()=>ctx.v2dDispatch_(req('submitLeave',{
+   requestId:'invalid-hours-12345',leaveDate:dateToday,
+   type:'病假',unit:'時數',startTime:'10:30',endTime:'09:00'
+ })),/晚於/);
+});
+test('unbound user cannot file missed punch or leave even with employee ID',()=>{
+ const old=currentUid;currentUid='U'+'b'.repeat(32);
+ for(const op of ['submitMiss','submitLeave']){
+  assert.throws(()=>ctx.v2dDispatch_(req(op,{
+    requestId:'unauth-12345678',date:dateToday,leaveDate:dateToday,
+    type:'上班',unit:'全天',time:'08:30',reason:'test',empid:'TEST001'
+  })),/尚未綁定/);
+ }
+ currentUid=old;
+});
+test('manager authorization and notification are not secretly enabled',()=>{
+ assert.equal(source.includes('LINE_CHANNEL_ACCESS_TOKEN'),false);
+ assert.equal(source.includes('getLineChannelAccessToken_'),false);
+ assert.equal(source.includes('handlePostback_'),false);
+ assert.equal(source.includes('SpreadsheetApp.getActiveSpreadsheet'),false);
+ assert.equal(ctx.doGet().mime,'TEXT');
+});
+properties.delete('ATTENDANCE_V2_APPLICATION_TEST_WRITES');
+test('test write switch can be disabled without affecting today and history reads',()=>{
+ assert.throws(()=>ctx.v2dDispatch_(req('submitLeave',{
+   requestId:'disabled-1234567',leaveDate:dateToday,
+   type:'婚假',unit:'全天'
+ })),/尚未開放/);
+ assert.ok(ctx.v2dDispatch_(req('leaveHistory')).result.data.length>0);
+ assert.ok(ctx.v2dDispatch_(req('todayAttendance')).result.ok);
 });
 
 console.log('TOTAL '+total+' passed');

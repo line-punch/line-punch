@@ -1,0 +1,297 @@
+/**
+ * ATTENDANCE V2: ISOLATED TEST DATA API (NOT PRODUCTION).
+ *
+ * Deploy in a BRAND NEW standalone Apps Script project; do not mix with
+ * YC_ATTENDANCE_V2_TEST_GAS (which has HTMLService public functions),
+ * the read-only LINE verification service, or the live attendance project.
+ *
+ * Script Properties (in the new standalone project):
+ *   ATTENDANCE_V2_DATA_TEST = enabled
+ *   ATTENDANCE_V2_TEST_SHEET_ID = exact isolated test Sheet ID
+ *   LINE_LOGIN_CHANNEL_ID = 2012136707
+ *
+ * doPost operations: whoami, bind, clock, clockStatus. doGet is plain text.
+ * Every business call verifies LINE id_token and checks the test Sheet guard.
+ * No employee roster, manager approvals, leave, notifications, or arbitrary
+ * user-selected spreadsheet IDs in this service.
+ *
+ * Owner-only (run in editor, never exposed as a web operation):
+ *   v2IssueTestInvitation (one 30-minute, random 32-hex invitation)
+ *
+ * Never log LINE ID tokens or print them in the reply.
+ */
+const V2D_CHANNEL = '2012136707';
+const V2D_REPLY_ORIGIN = 'https://line-punch.github.io';
+const V2D_SHEET_NAME = 'YC_ATTENDANCE_V2_TEST_ONLY';
+const V2D_EMPLOYEE_ID = 'TEST001';
+const V2D_LOCATION_CODE = 'TESTSITE';
+const V2D_INVITE_TTL_MS = 30 * 60 * 1000;
+
+function v2dProperties_() {
+  return PropertiesService.getScriptProperties();
+}
+function v2dTestSheet_() {
+  const p=v2dProperties_();
+  if(p.getProperty('ATTENDANCE_V2_DATA_TEST')!=='enabled' ||
+     p.getProperty('LINE_LOGIN_CHANNEL_ID')!==V2D_CHANNEL) {
+    throw Error('隔離測試服務尚未啟用或設定錯誤');
+  }
+  const id=String(p.getProperty('ATTENDANCE_V2_TEST_SHEET_ID')||'').trim();
+  if(!/^[A-Za-z0-9_-]{20,}$/.test(id)) throw Error('測試試算表設定錯誤');
+  const sheet=SpreadsheetApp.openById(id);
+  if(!sheet || sheet.getId()!==id || sheet.getName()!==V2D_SHEET_NAME)
+    throw Error('只允許指定的隔離測試資料庫');
+  const employees=sheet.getSheetByName('員工資料');
+  const locations=sheet.getSheetByName('上班地點');
+  const clocks=sheet.getSheetByName('打卡紀錄');
+  if(!employees || !locations || !clocks ||
+     employees.getLastRow()!==2 ||
+     String(employees.getRange(2,1).getValue())!==V2D_EMPLOYEE_ID ||
+     String(employees.getRange(2,8).getValue())!==V2D_LOCATION_CODE)
+    throw Error('測試資料結構不符合預期，已停止操作');
+  return sheet;
+}
+function v2dLineClaims_(tokenInput) {
+  const token=String(tokenInput||'');
+  if(token.length<30 || token.length>8192 || token.split('.').length!==3)
+    throw Error('LINE 登入資訊無效');
+  const response=UrlFetchApp.fetch('https://api.line.me/oauth2/v2.1/verify',{
+    method:'post', contentType:'application/x-www-form-urlencoded',
+    payload:{id_token:token,client_id:V2D_CHANNEL},muteHttpExceptions:true
+  });
+  if(response.getResponseCode()!==200)throw Error('LINE 登入驗證失敗');
+  let claims;
+  try{claims=JSON.parse(response.getContentText())}
+  catch(_){throw Error('LINE 驗證回應錯誤')}
+  const now=Math.floor(Date.now()/1000);
+  if(!claims || claims.iss!=='https://access.line.me' ||
+     String(claims.aud)!==V2D_CHANNEL ||
+     !/^U[0-9a-f]{32}$/i.test(String(claims.sub||'')) ||
+     !Number.isFinite(Number(claims.exp)) || Number(claims.exp)<=now ||
+     !Number.isFinite(Number(claims.iat)) || Number(claims.iat)>now+300)
+    throw Error('LINE 驗證內容不符合規則');
+  return String(claims.sub);
+}
+function v2dEmployee_(ss,lineUserId) {
+  const sh=ss.getSheetByName('員工資料');
+  const row=sh.getRange(2,1,1,8).getValues()[0];
+  const linked=String(row[3]||'').trim();
+  if(linked && linked!==lineUserId)
+    return {bound:false,employeeRow:row};
+  if(!linked)return {bound:false,employeeRow:row};
+  if(String(row[6]||'').trim()!=='在職')
+    throw Error('測試員工帳號已停用');
+  return {bound:true,employeeRow:row,employeeId:V2D_EMPLOYEE_ID,
+    name:String(row[1]||'模擬員工甲')};
+}
+function v2dWhoami_(ss,lineUserId) {
+  const emp=v2dEmployee_(ss,lineUserId);
+  return emp.bound ? {ok:true,bound:true,employee:{
+    employeeId:emp.employeeId,name:emp.name
+  }} : {ok:true,bound:false};
+}
+function v2dHashCode_(code,salt) {
+  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+    String(code)+':'+String(salt),Utilities.Charset.UTF_8);
+  return digest.map(b=>('0'+(b&255).toString(16)).slice(-2)).join('');
+}
+/**
+ * Run only from Google Apps Script editor for the dedicated DATA TEST project.
+ * This method is NOT listed as a public POST operation and the web app has
+ * a text-only doGet; no HTMLService page is exposed for google.script.run.
+ * The generated secret is printed ONCE in the owner's execution log.
+ */
+function v2IssueTestInvitation() {
+  const ss=v2dTestSheet_();
+  const emp=ss.getSheetByName('員工資料').getRange(2,4).getValue();
+  if(String(emp||'').trim())throw Error('模擬員工已綁定，不再核發邀請碼');
+  const lock=LockService.getScriptLock();
+  if(!lock.tryLock(15000))throw Error('系統忙碌，請稍後重新操作');
+  try {
+    const code=String(Utilities.getUuid()).replace(/-/g,'').toUpperCase();
+    if(!/^[A-F0-9]{32}$/.test(code))throw Error('邀請碼產生失敗');
+    const salt=String(Utilities.getUuid()).replace(/-/g,'');
+    const props=v2dProperties_();
+    props.setProperties({
+      V2D_INVITE_HASH:v2dHashCode_(code,salt),
+      V2D_INVITE_SALT:salt,
+      V2D_INVITE_EXPIRES:String(Date.now()+V2D_INVITE_TTL_MS)
+    });
+    Logger.log('僅測試使用：TEST001 一次性邀請碼 '+code+'（30分鐘內有效，請勿公開分享）');
+    return {ok:true,expiresMinutes:30};
+  }finally{lock.releaseLock()}
+}
+function v2dBind_(ss,lineUserId,payload) {
+  const code=String(payload&&payload.invitationCode||'').trim().toUpperCase();
+  if(!/^[A-F0-9]{32}$/.test(code))throw Error('邀請碼格式不正確');
+  const lock=LockService.getScriptLock();
+  if(!lock.tryLock(15000))throw Error('綁定忙碌，稍後再試');
+  try {
+    const sh=ss.getSheetByName('員工資料');
+    const old=String(sh.getRange(2,4).getValue()||'').trim();
+    if(old===lineUserId)return {ok:true,bound:true,alreadyBound:true};
+    if(old)throw Error('模擬員工已綁定其他測試帳號');
+    const props=v2dProperties_();
+    const hash=props.getProperty('V2D_INVITE_HASH')||'';
+    const salt=props.getProperty('V2D_INVITE_SALT')||'';
+    const exp=Number(props.getProperty('V2D_INVITE_EXPIRES')||0);
+    if(!hash||!salt||!Number.isFinite(exp)||exp<=Date.now())
+      throw Error('邀請碼不存在或已過期');
+    if(v2dHashCode_(code,salt)!==hash)throw Error('邀請碼不正確');
+    if(String(sh.getRange(2,7).getValue()||'').trim()!=='在職')
+      throw Error('模擬員工帳號不在職');
+    // Write first; a retry with the same LINE identity can confirm success.
+    sh.getRange(2,4).setValue(lineUserId);
+    SpreadsheetApp.flush();
+    props.deleteProperty('V2D_INVITE_HASH');
+    props.deleteProperty('V2D_INVITE_SALT');
+    props.deleteProperty('V2D_INVITE_EXPIRES');
+    return {ok:true,bound:true,alreadyBound:false};
+  }finally{lock.releaseLock()}
+}
+function v2dClockFind_(rows,employeeId,requestId) {
+  const source='LINE-V2:'+requestId;
+  let row=null;
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    if(String(r[10]||'')!==source)continue;
+    if(String(r[3]||'')!==employeeId || row)
+      throw Error('打卡請求編號衝突，請聯絡管理員');
+    row=r;
+  }
+  return row;
+}
+function v2dClockSummary_(row,already) {
+  const date=row[1] instanceof Date ?
+    Utilities.formatDate(row[1],'Asia/Taipei','yyyy/MM/dd') :
+    String(row[1]||'').replace(/-/g,'/');
+  const time=row[2] instanceof Date ?
+    Utilities.formatDate(row[2],'Asia/Taipei','HH:mm:ss') :
+    String(row[2]||'');
+  return {ok:true,found:true,alreadyRecorded:!!already,
+    date,time,type:String(row[5]||''),placeName:String(row[7]||''),
+    message:already?'已確認先前的測試打卡紀錄':'模擬打卡成功'};
+}
+function v2dClockId_(payload) {
+  const id=String(payload&&payload.requestId||'').trim();
+  if(!/^[A-Za-z0-9_-]{12,80}$/.test(id))
+    throw Error('打卡請求編號無效');
+  return id;
+}
+function v2dSite_(ss,latitude,longitude) {
+  const sheet=ss.getSheetByName('上班地點');
+  const data=sheet.getDataRange().getValues();
+  const sites=data.slice(1).filter(r=>String(r[0]||'')===V2D_LOCATION_CODE);
+  if(sites.length!==1)throw Error('模擬打卡地點設定不正確');
+  const row=sites[0],parts=String(row[3]||'').split(',');
+  if(parts.length!==2)throw Error('測試 GPS 中心點設定無效');
+  const lat=Number(parts[0]),lng=Number(parts[1]),radius=Number(row[4]);
+  if(!Number.isFinite(lat)||!Number.isFinite(lng) ||
+    lat< -90||lat>90||lng< -180||lng>180||
+    (lat===0 && lng===0)||!Number.isFinite(radius) ||
+    radius<10 || radius>300)throw Error('測試場地尚未完成 GPS 設定');
+  const rad=Math.PI/180,R=6371000;
+  const dLat=(latitude-lat)*rad,dLng=(longitude-lng)*rad;
+  const a=Math.sin(dLat/2)**2+
+    Math.cos(lat*rad)*Math.cos(latitude*rad)*Math.sin(dLng/2)**2;
+  const distance=Math.round(R*2*Math.asin(Math.min(1,Math.sqrt(a))));
+  return {code:V2D_LOCATION_CODE,name:String(row[1]||'測試場地'),
+    distance,allowDistance:radius};
+}
+function v2dClock_(ss,lineUserId,payload,asStatus) {
+  const id=v2dClockId_(payload);
+  const employee=v2dEmployee_(ss,lineUserId);
+  if(!employee.bound)throw Error('LINE 尚未綁定模擬員工');
+  const type=String(payload&&payload.type||'');
+  if(type!=='上班'&&type!=='下班')throw Error('打卡類型錯誤');
+  if(asStatus){
+    const sh=ss.getSheetByName('打卡紀錄');
+    const match=v2dClockFind_(sh.getDataRange().getValues(),V2D_EMPLOYEE_ID,id);
+    if(match&&String(match[5])!==type)throw Error('打卡請求編號類型不符');
+    return match?v2dClockSummary_(match,true):
+      {ok:true,found:false,message:'尚未查到打卡紀錄，請稍後再確認'};
+  }
+  const lock=LockService.getScriptLock();
+  if(!lock.tryLock(15000))throw Error('打卡忙碌，請稍後確認原請求');
+  try{
+    const sh=ss.getSheetByName('打卡紀錄'),rows=sh.getDataRange().getValues();
+    const existing=v2dClockFind_(rows,V2D_EMPLOYEE_ID,id);
+    if(existing){
+      if(String(existing[5])!==type)throw Error('打卡請求編號類型不符');
+      return v2dClockSummary_(existing,true);
+    }
+    if(payload.lat==null||payload.lng==null)throw Error('尚未取得 GPS 定位');
+    const lat=Number(payload.lat),lng=Number(payload.lng),accuracy=Number(payload.accuracy);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat< -90||lat>90||
+      lng< -180||lng>180)throw Error('GPS 座標無效');
+    if(!Number.isFinite(accuracy)||accuracy<=0||accuracy>150)
+      throw Error('定位精度不足，請重新定位');
+    const site=v2dSite_(ss,lat,lng);
+    if(site.distance>site.allowDistance)throw Error('超出測試打卡允許範圍');
+    const now=new Date();
+    const date=Utilities.formatDate(now,'Asia/Taipei','yyyy/MM/dd');
+    const time=Utilities.formatDate(now,'Asia/Taipei','HH:mm:ss');
+    for(const old of rows.slice(1)){
+      if(String(old[3])===V2D_EMPLOYEE_ID&&
+        String(old[1]).replace(/-/g,'/')===date&&String(old[5])===type)
+        return {ok:false,code:'ALREADY_CLOCKED',
+          message:'今天已有同類型測試打卡，請查詢紀錄'};
+    }
+    const row=[now,date,time,V2D_EMPLOYEE_ID,employee.name,type,
+      site.code,site.name,lat+','+lng,
+      '模擬距離'+site.distance+'公尺；定位精度'+Math.round(accuracy)+'公尺',
+      'LINE-V2:'+id];
+    sh.appendRow(row);
+    SpreadsheetApp.flush();
+    return v2dClockSummary_(row,false);
+  }finally{lock.releaseLock()}
+}
+function v2dDispatch_(params) {
+  const ss=v2dTestSheet_();
+  if(!params || typeof params!=='object')throw Error('無效請求');
+  const nonce=String(params.nonce||'');
+  if(!/^[0-9a-f]{40}$/.test(nonce))throw Error('無效請求識別碼');
+  const operation=String(params.operation||'');
+  if(!['whoami','bind','clock','clockStatus'].includes(operation))
+    throw Error('未提供此測試功能');
+  const raw=String(params.payload||'');
+  if(raw.length<30||raw.length>12000)throw Error('請求內容長度不正確');
+  let data;
+  try{data=JSON.parse(raw)}catch(_){throw Error('請求 JSON 格式錯誤')}
+  if(!data||Array.isArray(data)||typeof data!=='object'||
+    typeof data.idToken!=='string')throw Error('缺少 LINE 登入資料');
+  // Authentication always occurs before dispatch.
+  const lineUserId=v2dLineClaims_(data.idToken);
+  if(operation==='whoami')return {nonce,result:v2dWhoami_(ss,lineUserId)};
+  if(operation==='bind')return {nonce,result:v2dBind_(ss,lineUserId,data)};
+  if(operation==='clock')return {nonce,result:v2dClock_(ss,lineUserId,data,false)};
+  return {nonce,result:v2dClock_(ss,lineUserId,data,true)};
+}
+function v2dResponse_(data) {
+  // No LINE tokens, user IDs or stack traces ever echoed to caller.
+  const js=JSON.stringify(data).replace(/</g,'\\u003c')
+    .replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
+  const html='<!doctype html><html><head><meta charset="utf-8"></head><body>'+
+    '<script>window.top.postMessage('+js+','+
+    JSON.stringify(V2D_REPLY_ORIGIN)+
+    ');</script></body></html>';
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+function doPost(e) {
+  const params=(e&&e.parameter)||{},nonce=String(params.nonce||'');
+  let reply;
+  try{
+    const data=v2dDispatch_(params);
+    reply={bridge:'YC_V2_STAGING_FORM_V1',nonce:data.nonce,ok:true,
+      result:data.result};
+  }catch(_){
+    reply={bridge:'YC_V2_STAGING_FORM_V1',nonce,ok:false,
+      error:'測試服務尚未完成此操作，請查詢原請求或聯絡管理員'};
+  }
+  return v2dResponse_(reply);
+}
+function doGet() {
+  return ContentService.createTextOutput('獨立打卡 V2 模擬資料測試服務：無網頁操作介面。')
+    .setMimeType(ContentService.MimeType.TEXT);
+}

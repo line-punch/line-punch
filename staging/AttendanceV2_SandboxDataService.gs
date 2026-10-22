@@ -221,6 +221,13 @@ function v2dClock_(ss,lineUserId,payload,asStatus) {
       return v2dClockSummary_(existing,true);
     }
     if(payload.lat==null||payload.lng==null)throw Error('尚未取得 GPS 定位');
+    // A delayed retry may reuse a stored request ID, but a first-time write
+    // must use a fresh geolocation reading. Never accept old captured coordinates
+    // just because a request was left pending in sessionStorage.
+    const capturedAt=Number(payload.capturedAt);
+    if(!Number.isFinite(capturedAt) || capturedAt<Date.now()-120000 ||
+       capturedAt>Date.now()+15000)
+      throw Error('GPS 定位已過期，請重新取得位置');
     const lat=Number(payload.lat),lng=Number(payload.lng),accuracy=Number(payload.accuracy);
     if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat< -90||lat>90||
       lng< -180||lng>180)throw Error('GPS 座標無效');
@@ -293,6 +300,7 @@ function v2dPublicFailure_(error) {
     '尚未取得 GPS 定位':'GPS_MISSING',
     'GPS 座標無效':'GPS_INVALID',
     '定位精度不足，請重新定位':'GPS_ACCURACY',
+    'GPS 定位已過期，請重新取得位置':'GPS_STALE',
     '測試場地尚未完成 GPS 設定':'SITE_NOT_READY',
     '超出測試打卡允許範圍':'OUT_OF_RANGE',
     '打卡類型錯誤':'TYPE_INVALID',

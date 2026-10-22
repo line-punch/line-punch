@@ -311,6 +311,36 @@ test('poor accuracy rejected',()=>{
   type:'上班',requestId:reqId,lat:25,lng:121,accuracy:999,capturedAt:Date.now()
  })),/定位精度不足/);
 });
+
+test('previous-day punch does not block a fresh calendar-day TEST001 clock',()=>{
+ const sh=sheets['打卡紀錄'],n=sh.rows.length;
+ const yesterday=new Date(Date.now()-86400000);
+ const prior=[new Date(),yesterday,'09:00:00','TEST001','模擬員工甲',
+   '上班','TESTSITE','測試場地','test-only','', 'LINE-V2:yesterday'];
+ sh.rows.push(prior);
+ try {
+   const result=ctx.v2dDispatch_(req('clock',{
+     type:'上班',requestId:'new_workday_12345678',lat:25,lng:121,
+     accuracy:12,capturedAt:Date.now()
+   })).result;
+   assert.equal(result.ok,true);
+   assert.equal(result.alreadyRecorded,false);
+   assert.equal(sh.rows.length,n+2);
+ } finally {
+   sh.rows.length=n;
+ }
+});
+test('read-only todayAttendance ignores previous calendar-day shift',()=>{
+ const sh=sheets['打卡紀錄'],n=sh.rows.length;
+ sh.rows.push([new Date(),new Date(Date.now()-86400000),
+   '23:59:00','TEST001','模擬員工甲','上班',
+   'TESTSITE','測試場地','test-only','', 'LINE-V2:yesterday']);
+ try {
+   const result=ctx.v2dDispatch_(req('todayAttendance')).result;
+   assert.equal(result.clockIn,null);
+   assert.equal(result.total,0);
+ }finally{sh.rows.length=n}
+});
 test('valid GPS punch writes exactly one 11-column row',()=>{
  const r=ctx.v2dDispatch_(req('clock',{
   type:'上班',requestId:reqId,lat:25,lng:121,accuracy:10,capturedAt:Date.now()

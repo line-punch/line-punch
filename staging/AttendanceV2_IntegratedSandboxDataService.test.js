@@ -11,7 +11,15 @@ function sheet(name,rows){
      getValues:()=>Array.from({length:rowsCount},(_,i)=>
        Array.from({length:colsCount},(_,j)=>sh.rows[r+i-1]?.[c+j-1])),
      setValue(value){if(!sh.rows[r-1])sh.rows[r-1]=[];
-       sh.rows[r-1][c-1]=value;return this}
+       sh.rows[r-1][c-1]=value;return this},
+     setValues(matrix){
+       assert.equal(matrix.length,rowsCount);
+       for(let i=0;i<rowsCount;i++){
+         assert.equal(matrix[i].length,colsCount);
+         for(let j=0;j<colsCount;j++)sh.rows[r+i-1][c+j-1]=matrix[i][j];
+       }
+       return this;
+     }
    }},
    appendRow(row){this.rows.push(row.slice())}
  };
@@ -728,6 +736,108 @@ test('test write switch can be disabled without affecting today and history read
  })),/尚未開放/);
  assert.ok(ctx.v2dDispatch_(req('leaveHistory')).result.data.length>0);
  assert.ok(ctx.v2dDispatch_(req('todayAttendance')).result.ok);
+});
+
+
+// ---- Existing boss-only manager approvals moved from insecure postback ----
+sheets['審核通知名單']=sheet('審核通知名單',[
+ ['員工ID','員工姓名','第一主管LINE ID','第二主管LINE ID','老闆LINE ID'],
+ ['TEST001','模擬員工甲','','','']
+]);
+const boss=sheets['審核通知名單'].rows[1];
+const existingMiss=sheets['補打卡申請'].rows.find(r=>
+ String(r[0])==='MISS-V2-miss-test-12345678');
+const existingLeave=sheets['請假申請'].rows.find(r=>
+ String(r[0])==='LEAVE-V2-leave-test-12345678');
+test('manager review cannot open application without boss approval identity',()=>{
+ boss[2]=currentUid;boss[4]='';
+ assert.throws(()=>ctx.v2dDispatch_(req('reviewDetails',{
+   type:'miss',no:existingMiss[0]
+ })),/無審核權限/);
+});
+boss[2]='';boss[4]=currentUid;
+test('authorized boss may read exact missed-punch application details',()=>{
+ const r=ctx.v2dDispatch_(req('reviewDetails',{
+   type:'miss',no:existingMiss[0]
+ })).result;
+ assert.equal(r.ok,true);assert.equal(r.status,'待審核');
+ assert.equal(r.punchType,'上班');assert.equal(r.punchTime,'08:30');
+ assert.equal(r.employeeName,'模擬員工甲');
+ assert.equal(r.reason,'忘記打卡');
+});
+test('review mutation is OFF until separately enabled in isolated test',()=>{
+ const old=existingMiss[8];
+ assert.throws(()=>ctx.v2dDispatch_(req('review',{
+   type:'miss',no:existingMiss[0],decision:'核准'
+ })),/尚未開放/);
+ assert.equal(existingMiss[8],old);
+});
+properties.set('ATTENDANCE_V2_REVIEW_TEST_WRITES','enabled');
+test('unauthorized alternative LINE identity cannot approve even with request ID',()=>{
+ const old=currentUid;currentUid='U'+'b'.repeat(32);
+ assert.throws(()=>ctx.v2dDispatch_(req('review',{
+   type:'miss',no:existingMiss[0],decision:'核准'
+ })),/無審核權限/);
+ currentUid=old;
+ assert.equal(existingMiss[8],'待審核');
+});
+test('boss approval sets old missed-punch columns I K L M correctly',()=>{
+ const r=ctx.v2dDispatch_(req('review',{
+   type:'miss',no:existingMiss[0],decision:'核准'
+ })).result;
+ assert.equal(r.ok,true);assert.equal(r.changed,true);
+ assert.equal(existingMiss[8],'核准');
+ assert.equal(existingMiss[10],'授權主管');
+ assert.ok(String(existingMiss[11]).includes('/'));
+ assert.ok(existingMiss[12] instanceof Date);
+});
+test('double-clicking same approval never mutates twice',()=>{
+ const oldDate=existingMiss[12];
+ const r=ctx.v2dDispatch_(req('review',{
+   type:'miss',no:existingMiss[0],decision:'核准'
+ })).result;
+ assert.equal(r.changed,false);
+ assert.equal(r.status,'核准');
+ assert.equal(existingMiss[12],oldDate);
+});
+test('reviewer cannot change a previously approved decision to rejection',()=>{
+ const r=ctx.v2dDispatch_(req('review',{
+   type:'miss',no:existingMiss[0],decision:'駁回'
+ })).result;
+ assert.equal(r.changed,false);
+ assert.equal(existingMiss[8],'核准');
+});
+test('boss leave rejection updates exactly 12-column legacy schema',()=>{
+ const r=ctx.v2dDispatch_(req('review',{
+   type:'leave',no:existingLeave[0],decision:'駁回'
+ })).result;
+ assert.equal(r.ok,true);assert.equal(r.changed,true);
+ assert.equal(existingLeave.length,12);
+ assert.equal(existingLeave[8],'駁回');
+ assert.equal(existingLeave[10],'授權主管');
+});
+test('invalid manager decision and wrong application type are denied',()=>{
+ assert.throws(()=>ctx.v2dDispatch_(req('review',{
+   type:'leave',no:existingLeave[0],decision:'maybe'
+ })),/不支援的審核決定/);
+ assert.throws(()=>ctx.v2dDispatch_(req('review',{
+   type:'wrong',no:existingLeave[0],decision:'核准'
+ })),/審核類型不正確/);
+});
+test('duplicate application numbers halt review instead of modifying wrong row',()=>{
+ const rows=sheets['請假申請'].rows,n=rows.length;
+ rows.push([...existingLeave]);
+ try{assert.throws(()=>ctx.v2dDispatch_(req('reviewDetails',{
+   type:'leave',no:existingLeave[0]
+ })),/申請單號重複/)}
+ finally{rows.length=n}
+});
+properties.delete('ATTENDANCE_V2_REVIEW_TEST_WRITES');
+test('review switch can be turned off again after a test run',()=>{
+ assert.throws(()=>ctx.v2dDispatch_(req('review',{
+   type:'leave',no:existingLeave[0],decision:'核准'
+ })),/尚未開放/);
+ assert.equal(existingLeave[8],'駁回');
 });
 
 console.log('TOTAL '+total+' passed');

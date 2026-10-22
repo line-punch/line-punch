@@ -220,6 +220,22 @@ function v2dClock_(ss,lineUserId,payload,asStatus) {
       if(String(existing[5])!==type)throw Error('打卡請求編號類型不符');
       return v2dClockSummary_(existing,true);
     }
+    // A bound employee's existing punch is authoritative even after leaving
+    // the allowed GPS area. Check the server record before revalidating GPS.
+    const now=new Date();
+    const date=Utilities.formatDate(now,'Asia/Taipei','yyyy/MM/dd');
+    const time=Utilities.formatDate(now,'Asia/Taipei','HH:mm:ss');
+    for(const old of rows.slice(1)){
+      // Google Sheets may auto-convert a written yyyy/MM/dd cell into a Date.
+      // Compare the Taipei calendar day in both Date and textual cell cases.
+      const oldDay=old[1] instanceof Date
+        ? Utilities.formatDate(old[1],'Asia/Taipei','yyyy/MM/dd')
+        : String(old[1]||'').replace(/-/g,'/');
+      if(String(old[3])===V2D_EMPLOYEE_ID&&
+        oldDay===date&&String(old[5])===type)
+        return {ok:false,code:'ALREADY_CLOCKED',
+          message:'今天已有同類型測試打卡，請查詢紀錄'};
+    }
     if(payload.lat==null||payload.lng==null)throw Error('尚未取得 GPS 定位');
     // A delayed retry may reuse a stored request ID, but a first-time write
     // must use a fresh geolocation reading. Never accept old captured coordinates
@@ -235,20 +251,6 @@ function v2dClock_(ss,lineUserId,payload,asStatus) {
       throw Error('定位精度不足，請重新定位');
     const site=v2dSite_(ss,lat,lng);
     if(site.distance>site.allowDistance)throw Error('超出測試打卡允許範圍');
-    const now=new Date();
-    const date=Utilities.formatDate(now,'Asia/Taipei','yyyy/MM/dd');
-    const time=Utilities.formatDate(now,'Asia/Taipei','HH:mm:ss');
-    for(const old of rows.slice(1)){
-      // Google Sheets may auto-convert a written yyyy/MM/dd cell into a Date.
-      // Compare the Taipei calendar day in both Date and textual cell cases.
-      const oldDay=old[1] instanceof Date
-        ? Utilities.formatDate(old[1],'Asia/Taipei','yyyy/MM/dd')
-        : String(old[1]||'').replace(/-/g,'/');
-      if(String(old[3])===V2D_EMPLOYEE_ID&&
-        oldDay===date&&String(old[5])===type)
-        return {ok:false,code:'ALREADY_CLOCKED',
-          message:'今天已有同類型測試打卡，請查詢紀錄'};
-    }
     const row=[now,date,time,V2D_EMPLOYEE_ID,employee.name,type,
       site.code,site.name,lat+','+lng,
       '模擬距離'+site.distance+'公尺；定位精度'+Math.round(accuracy)+'公尺',
